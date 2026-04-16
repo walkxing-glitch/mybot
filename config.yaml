@@ -1,0 +1,40 @@
+model:
+  default: "claude-sonnet-4-20250514"
+  fallback: "deepseek-chat"
+
+api_keys:
+  # 实际 key 在 .env 里，这里只定义变量名映射
+  anthropic: "${ANTHROPIC_API_KEY}"
+  openai: "${OPENAI_API_KEY}"
+  doubao: "${DOUBAO_API_KEY}"
+
+tools:
+  enabled:
+    - shell
+    - code
+    - web_search
+    - web_fetch
+    - ontology
+    - neural_twin
+    - calendar
+    - memory
+  shell:
+    allowed_commands: [ls, cat, grep, find, python, git, pip, uv, docker]
+    timeout: 30
+  code:
+    workspace_dirs:
+      - /Users/ddn/Developer
+  ontology:
+    api_url: "http://myontology-api:8003"  # Docker 网络内部地址
+
+memory:
+  decay:
+    default_half_life_days: 30
+    fact_half_life_days: 180
+    preference_half_life_days: 365
+  consolidation_interval: 10  # 每 N 次对话触发整理
+
+gateway:
+  telegram:
+    token: "${TELEGRAM_BOT_TOKEN}"
+    polling_mode: true

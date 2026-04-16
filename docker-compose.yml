@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  mybot:
+    build: .
+    container_name: mybot
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml
+    networks:
+      - myontology_default
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+networks:
+  myontology_default:
+    external: true
