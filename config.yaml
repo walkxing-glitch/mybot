@@ -26,7 +26,10 @@ tools:
     workspace_dirs:
       - /Users/ddn/Developer
   ontology:
-    api_url: "http://myontology-api:8003"  # Docker 网络内部地址
+    # 对接 myontology/ontology-engine（本机 :8003，已在前台 python 跑着）
+    # ontology-platform 已于 2026-04-16 停止开发，不再对接
+    api_url: "http://localhost:8003"
+    ontology_id: "362a5ce1-29ca-4b4b-8bd0-29c122435bd3"  # "邢智强 2025"
 
 memory:
   decay:
@@ -39,3 +42,44 @@ gateway:
   telegram:
     token: "${TELEGRAM_BOT_TOKEN}"
     polling_mode: true
+
+# 丽泽园记忆系统（mybot/palace）
+# See docs/superpowers/specs/2026-04-16-mybot-memory-palace-design.md
+palace:
+  db_path: data/palace.db
+  current_year_scope: 3
+  embedder: BAAI/bge-m3
+  embedder_dim: 1024
+  reranker: BAAI/bge-reranker-v2-m3
+  top_k_south: 5
+  top_k_fact: 3
+
+rooms:
+  fixed:
+    1: 消费
+    2: 工作
+    3: 人际
+    4: 健康
+    5: 学习
+    6: 技术
+    7: 项目
+    8: 家庭
+    9: 出行
+    10: 情绪
+  misc_room: 20
+
+atrium_guards:
+  blacklist_patterns:
+    - "不可用"
+    - "未能找到"
+    - "服务中断"
+    - "超时"
+    - "工具报错"
+    - "无法访问"
+    - "操作失败"
+    - "连接失败"
+  evidence_threshold: 3
+  evidence_days_span: 2
+  require_manual_approve: true
+  review_cycle_days: 30
+  stale_archive_days: 90
