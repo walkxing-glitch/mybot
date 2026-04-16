@@ -25,6 +25,7 @@ class AtriumGuards:
 
 @dataclass
 class PalaceConfig:
+    enabled: bool = True
     db_path: Path = Path("data/palace.db")
     current_year_scope: int = 3
     embedder: str = "BAAI/bge-m3"
@@ -43,6 +44,8 @@ class PalaceConfig:
     def from_dict(cls, d: Dict[str, Any]) -> "PalaceConfig":
         cfg = cls()
         p = d.get("palace") or {}
+        if "enabled" in p:
+            cfg.enabled = bool(p["enabled"])
         if "db_path" in p:
             cfg.db_path = Path(p["db_path"])
         if "current_year_scope" in p:

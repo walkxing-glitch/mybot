@@ -277,7 +277,7 @@ async def run_telegram_from_config(
     """加载 config + 构造 Agent + 启动 Telegram bot。"""
     from mybot.agent import Agent
     from mybot.config import Config
-    from mybot.gateway.cli import _build_memory_engine  # 复用记忆引擎构造逻辑
+    from mybot.gateway.cli import _build_memory_engine, _try_build_palace
     from mybot.llm import configure_default_client
 
     try:
@@ -304,9 +304,10 @@ async def run_telegram_from_config(
         api_keys=config.api_keys,
     )
 
-    # Build memory_engine FIRST so MemoryTool can receive the injection.
-    memory_engine = None
-    if MemoryEngine is not None:
+    # Build memory engine FIRST so MemoryTool can receive the injection.
+    # Preference order: MemoryPalace (new) → MemoryEngine (legacy).
+    memory_engine = await _try_build_palace(config)
+    if memory_engine is None and MemoryEngine is not None:
         try:
             memory_engine = _build_memory_engine(config, MemoryEngine)
             if memory_engine is not None:
@@ -315,6 +316,7 @@ async def run_telegram_from_config(
                     maybe = init()
                     if asyncio.iscoroutine(maybe):
                         await maybe
+                logger.info("using legacy MemoryEngine")
         except Exception as exc:  # noqa: BLE001
             logger.warning("初始化记忆引擎失败: %s", exc)
             memory_engine = None

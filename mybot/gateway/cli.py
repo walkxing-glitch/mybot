@@ -316,9 +316,10 @@ async def run_cli_from_config(
         api_keys=config.api_keys,
     )
 
-    # Build memory_engine FIRST so MemoryTool can receive the injection.
-    memory_engine = None
-    if MemoryEngine is not None:
+    # Build memory engine FIRST so MemoryTool can receive the injection.
+    # Preference order: MemoryPalace (new) → MemoryEngine (legacy).
+    memory_engine = await _try_build_palace(config)
+    if memory_engine is None and MemoryEngine is not None:
         try:
             memory_engine = _build_memory_engine(config, MemoryEngine)
             if memory_engine is not None:
@@ -327,6 +328,7 @@ async def run_cli_from_config(
                     maybe = init()
                     if asyncio.iscoroutine(maybe):
                         await maybe
+                logger.info("using legacy MemoryEngine")
         except Exception as exc:  # noqa: BLE001
             logger.warning("初始化记忆引擎失败: %s", exc)
             memory_engine = None
@@ -340,6 +342,84 @@ async def run_cli_from_config(
 
     agent = Agent(config=config, memory_engine=memory_engine, tools=tools)
     await run_cli(agent, session_id=session_id)
+
+
+async def _try_build_palace(config: Any) -> Any:
+    """Try to construct MemoryPalace per config.palace.enabled.
+
+    Returns None if palace is disabled or initialization fails — caller
+    should fall back to MemoryEngine.
+    """
+    try:
+        from mybot.palace import MemoryPalace
+        from mybot.palace.config import PalaceConfig
+    except ImportError:
+        return None
+
+    cfg_dict = getattr(config, "raw", None) or _config_as_dict(config)
+    if not cfg_dict:
+        return None
+    pcfg = PalaceConfig.from_dict(cfg_dict)
+    if not pcfg.enabled:
+        return None
+
+    from mybot.llm import completion
+
+    async def llm_call(messages: list[dict[str, Any]]) -> str:
+        resp = await completion(messages=messages)
+        try:
+            msg = resp["choices"][0]["message"]
+            content = msg.get("content") or ""
+            if isinstance(content, list):
+                content = "".join(
+                    p.get("text", "") if isinstance(p, dict) else str(p)
+                    for p in content
+                )
+            return content
+        except (KeyError, IndexError, TypeError):
+            return ""
+
+    try:
+        from mybot.palace.embedder import Embedder
+        from mybot.palace.reranker import Reranker
+        embedder = Embedder(
+            model_name=pcfg.embedder, dim=pcfg.embedder_dim,
+        )
+        # Eagerly verify embedder works — bge-m3 needs torch>=2.4.
+        # If this fails, we should fall back to MemoryEngine rather than
+        # crashing the first time an archive/retrieve runs.
+        _ = embedder.encode("palace startup probe")
+        reranker = Reranker(model_name=pcfg.reranker)
+        palace = MemoryPalace(
+            cfg=pcfg, llm=llm_call,
+            embedder=embedder, reranker=reranker,
+        )
+        await palace.initialize()
+        logger.info("MemoryPalace initialized: %s", pcfg.db_path)
+        return palace
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "MemoryPalace init failed (%s); falling back to legacy engine. "
+            "Hint: pip install 'torch>=2.4' FlagEmbedding",
+            exc,
+        )
+        return None
+
+
+def _config_as_dict(config: Any) -> dict[str, Any]:
+    """Extract config as dict — support dataclass-like and plain dict."""
+    if isinstance(config, dict):
+        return config
+    # Try to re-read YAML; Config.load strips unknown keys.
+    try:
+        import yaml  # type: ignore
+        from pathlib import Path
+        p = Path("config.yaml")
+        if p.exists():
+            return yaml.safe_load(p.read_text()) or {}
+    except Exception:  # noqa: BLE001
+        pass
+    return {}
 
 
 def _build_memory_engine(config: Any, MemoryEngineCls: Any) -> Any:
