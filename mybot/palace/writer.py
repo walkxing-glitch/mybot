@@ -77,11 +77,13 @@ class Writer:
         floor = _day_of_year(now_date)
 
         chunks = await self.chunker.chunk_and_summarise(messages)
+        result = ArchiveResult()
         if not chunks:
             logger.info("archive: no chunks for session %s", session_id)
-            return ArchiveResult()
-
-        result = ArchiveResult()
+            # Still extract explicit 记住/以后别 — these are worth saving even
+            # when no meaningful topic chunks emerged.
+            await self._maybe_extract_explicit(messages, result)
+            return result
 
         for chunk in chunks:
             slot = await self.router.assign_room(
