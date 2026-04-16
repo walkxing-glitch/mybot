@@ -168,3 +168,96 @@ class LLMClient:
             usage=usage,
             raw=resp,
         )
+
+
+# ----------------------------------------------------------------------
+# 模块级函数入口（给 Agent 层用）
+# ----------------------------------------------------------------------
+#
+# 约定的极简接口：
+#     resp = await completion(messages, tools=..., model=...) -> dict
+# 返回 OpenAI chat-completion 风格的 dict。
+
+
+_default_client: LLMClient | None = None
+
+
+def configure_default_client(
+    *,
+    default_model: str,
+    fallback_model: str | None = None,
+    api_keys: dict[str, str] | None = None,
+    temperature: float = 0.7,
+) -> LLMClient:
+    """设置模块级默认 LLMClient。应用启动时调用一次。"""
+    global _default_client
+    _default_client = LLMClient(
+        default_model=default_model,
+        fallback_model=fallback_model,
+        api_keys=api_keys,
+        temperature=temperature,
+    )
+    return _default_client
+
+
+def get_default_client() -> LLMClient:
+    """按需创建兜底 client（未显式 configure 时用）。"""
+    global _default_client
+    if _default_client is None:
+        _default_client = LLMClient(default_model="claude-sonnet-4-20250514")
+    return _default_client
+
+
+async def completion(
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None = None,
+    model: str | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """模块级 completion 入口，Agent 统一调用。
+
+    返回 OpenAI chat-completion 风格 dict：
+        {"choices": [{"message": {...}}], "usage": {...}, "model": "..."}
+    """
+    client = get_default_client()
+    resp = await client.complete(messages=messages, tools=tools, model=model, **kwargs)
+
+    # 优先返回 litellm 原始 response 的 dict 形态，保留最多信息
+    raw = resp.raw
+    if raw is not None:
+        if isinstance(raw, dict):
+            return raw
+        model_dump = getattr(raw, "model_dump", None)
+        if callable(model_dump):
+            try:
+                return model_dump()
+            except Exception:  # noqa: BLE001
+                pass
+        to_dict = getattr(raw, "to_dict", None)
+        if callable(to_dict):
+            try:
+                return to_dict()
+            except Exception:  # noqa: BLE001
+                pass
+
+    # 兜底：用 LLMResponse 字段手工组装
+    message: dict[str, Any] = {"role": "assistant", "content": resp.content}
+    if resp.tool_calls:
+        import json as _json
+
+        message["tool_calls"] = [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.name,
+                    "arguments": _json.dumps(tc.arguments, ensure_ascii=False),
+                },
+            }
+            for tc in resp.tool_calls
+        ]
+    return {
+        "choices": [{"index": 0, "message": message, "finish_reason": "stop"}],
+        "model": resp.model,
+        "usage": resp.usage,
+    }

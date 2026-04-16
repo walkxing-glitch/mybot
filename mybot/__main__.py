@@ -37,25 +37,27 @@ def main() -> None:
 
     if args.gateway == "cli":
         try:
-            from mybot.gateway.cli import run_cli  # type: ignore[attr-defined]
+            from mybot.gateway.cli import run_cli_from_config  # type: ignore[attr-defined]
         except ImportError:
             print(
                 "[mybot] CLI gateway 尚未实现（mybot/gateway/cli.py 未找到）。",
                 file=sys.stderr,
             )
             sys.exit(1)
-        asyncio.run(run_cli(config_path=args.config, session_id=args.session))
+        asyncio.run(
+            run_cli_from_config(config_path=args.config, session_id=args.session)
+        )
 
     elif args.gateway == "telegram":
         try:
-            from mybot.gateway.telegram import run_telegram  # type: ignore[attr-defined]
+            from mybot.gateway.telegram import run_telegram_from_config  # type: ignore[attr-defined]
         except ImportError:
             print(
                 "[mybot] Telegram gateway 尚未实现（mybot/gateway/telegram.py 未找到）。",
                 file=sys.stderr,
             )
             sys.exit(1)
-        asyncio.run(run_telegram(config_path=args.config))
+        asyncio.run(run_telegram_from_config(config_path=args.config))
 
 
 if __name__ == "__main__":
