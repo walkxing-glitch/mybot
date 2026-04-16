@@ -1,0 +1,6 @@
+[
+  {"role": "user", "content": "我在北京花了多少钱？"},
+  {"role": "assistant", "content": "根据账单，共 69 万元。"},
+  {"role": "user", "content": "下周帮我安排三个会议"},
+  {"role": "assistant", "content": "好，周二/周四/周五各一个？"}
+]
