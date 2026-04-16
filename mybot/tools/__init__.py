@@ -65,8 +65,12 @@ class ToolRegistry:
         if not hasattr(pkg, "__path__"):
             return
 
+        # memory_tool requires dependency injection (memory_engine), handled separately
+        # by load_enabled_tools — skip it in auto-discovery.
+        SKIP_MODULES = {"base", "memory_tool"}
+
         for info in pkgutil.iter_modules(pkg.__path__):
-            if info.name.startswith("_") or info.name == "base":
+            if info.name.startswith("_") or info.name in SKIP_MODULES:
                 continue
             mod_name = f"{package}.{info.name}"
             try:
@@ -95,4 +99,30 @@ class ToolRegistry:
                     logger.debug("Registered tool: %s (%s)", instance.name, mod_name)
 
 
-__all__ = ["BaseTool", "ToolResult", "ToolRegistry"]
+def load_enabled_tools(config: Any, memory_engine: Any = None) -> list[BaseTool]:
+    """Bootstrap: auto-discover tools per config.tools.enabled, inject memory_engine for MemoryTool.
+
+    Returns a list of BaseTool instances, ready to be passed into Agent.
+    """
+    enabled = set(getattr(config.tools, "enabled", []) or [])
+
+    registry = ToolRegistry()
+    # auto_discover skips memory_tool's MemoryTool (it needs an engine), we handle that manually.
+    registry.auto_discover(package="mybot.tools", enabled=enabled)
+
+    tools: list[BaseTool] = list(registry.list_tools())
+
+    # Manually instantiate MemoryTool if enabled and memory_engine is available.
+    if "memory" in enabled and memory_engine is not None:
+        try:
+            from mybot.tools.memory_tool import MemoryTool
+
+            tools.append(MemoryTool(memory_engine=memory_engine))
+            logger.debug("Registered tool: memory (with memory_engine)")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to instantiate MemoryTool: %s", exc)
+
+    return tools
+
+
+__all__ = ["BaseTool", "ToolResult", "ToolRegistry", "load_enabled_tools"]

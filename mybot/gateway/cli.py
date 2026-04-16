@@ -316,13 +316,7 @@ async def run_cli_from_config(
         api_keys=config.api_keys,
     )
 
-    tools: list[Any] = []
-    if load_enabled_tools is not None:
-        try:
-            tools = load_enabled_tools(config)  # type: ignore[misc]
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("加载工具失败: %s", exc)
-
+    # Build memory_engine FIRST so MemoryTool can receive the injection.
     memory_engine = None
     if MemoryEngine is not None:
         try:
@@ -336,6 +330,13 @@ async def run_cli_from_config(
         except Exception as exc:  # noqa: BLE001
             logger.warning("初始化记忆引擎失败: %s", exc)
             memory_engine = None
+
+    tools: list[Any] = []
+    if load_enabled_tools is not None:
+        try:
+            tools = load_enabled_tools(config, memory_engine=memory_engine)  # type: ignore[misc]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("加载工具失败: %s", exc)
 
     agent = Agent(config=config, memory_engine=memory_engine, tools=tools)
     await run_cli(agent, session_id=session_id)
