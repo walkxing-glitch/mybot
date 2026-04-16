@@ -1,12 +1,13 @@
 model:
-  default: "claude-sonnet-4-20250514"
-  fallback: "deepseek-chat"
+  default: "deepseek/deepseek-chat"
+  fallback: null
 
 api_keys:
   # 实际 key 在 .env 里，这里只定义变量名映射
   anthropic: "${ANTHROPIC_API_KEY}"
   openai: "${OPENAI_API_KEY}"
   doubao: "${DOUBAO_API_KEY}"
+  deepseek: "${DEEPSEEK_API_KEY}"
 
 tools:
   enabled:
