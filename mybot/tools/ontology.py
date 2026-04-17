@@ -32,20 +32,37 @@ DEFAULT_ONTOLOGY_ID = os.environ.get(
 DEFAULT_TIMEOUT = 30.0  # get_overview 冷启约 22s，留足余量
 
 _ALLOWED_OPS = (
+    # 查询
     "search",
     "get_object",
+    "get_object_timeline",
     "get_stats",
     "find_person",
     "list_relators",
+    "get_relator_synthesis",
     "get_overview",
+    "get_dashboard",
     "get_insights",
-    # —— 认知层端点（整合 place+person+wechat+financial+photos）
+    # 时间 / 情境
     "list_months",
     "get_month",
     "get_month_narrative",
+    "get_month_absences",
+    "get_situations",
     "get_narrative",
+    "get_chapters",
     "get_habits",
     "get_geography",
+    # 认知
+    "get_cognition_summary",
+    "get_cognition",
+    "get_cognition_relationship",
+    # 图谱
+    "get_graph",
+    "get_social_evolution",
+    "get_graph_analytics",
+    # 执行
+    "run_pipeline",
 )
 
 
@@ -54,18 +71,17 @@ class OntologyTool(BaseTool):
 
     name = "ontology"
     description = (
-        "查询本体论知识图谱（人/地点/事件/关系/习惯/情境）。核心操作：\n"
-        "— search / get_object / get_stats：搜实体、看详情、全局类型统计\n"
-        "— find_person(name)：按中文名找人及其所有关系（财务往来、共识、沟通）\n"
-        "— list_relators：列 805 条语义关系（如 financial:credit_cycling）\n"
-        "— list_months：列出有数据的月份及事件数量（选月份的索引）\n"
-        "— get_month(month='YYYY-MM')：**某月聚合视图**，含 places/people/wechat 会话/"
-        "financial/events/photos（4KB/月，最常用）\n"
-        "— get_month_narrative(month)：某月的自然语言叙述\n"
-        "— get_narrative：整体人生叙事（分章节）\n"
-        "— get_habits：习惯模式分析\n"
-        "— get_geography：地点×消费×居住×出行融合视图（101KB，按需用）\n"
-        "— get_overview / get_insights：本体总览 / dashboard 洞察"
+        "查询本体论引擎（人/关系/事件/认知/图谱/情境）。27 个操作：\n"
+        "【查询】search / get_object / get_object_timeline / get_stats / find_person(name)\n"
+        "【关系】list_relators / get_relator_synthesis(relator_id) — 关系深层解读\n"
+        "【全景】get_overview / get_dashboard / get_insights\n"
+        "【时间】list_months / get_month(YYYY-MM) / get_month_narrative / "
+        "get_month_absences / get_situations / get_narrative / get_chapters\n"
+        "【认知】get_cognition_summary / get_cognition(kind) / "
+        "get_cognition_relationship(person_key) — 43 种认知类型\n"
+        "【图谱】get_graph / get_social_evolution / get_graph_analytics\n"
+        "【习惯】get_habits / get_geography\n"
+        "【执行】run_pipeline(mode=reactive|force|batch) — 响应式调度 17 个引擎"
     )
     parameters = {
         "type": "object",
@@ -95,9 +111,31 @@ class OntologyTool(BaseTool):
                 "type": "string",
                 "description": "参与者 UUID，过滤只看该实体参与的关系（list_relators 用）。",
             },
+            "relator_id": {
+                "type": "string",
+                "description": "关系子 UUID（get_relator_synthesis 用）。",
+            },
             "month": {
                 "type": "string",
-                "description": "月份，格式 'YYYY-MM'（get_month / get_month_narrative 用）。",
+                "description": "月份，格式 'YYYY-MM'（get_month / get_month_narrative / get_month_absences 用）。",
+            },
+            "kind": {
+                "type": "string",
+                "description": "认知类型，如 habit/absence/spending_prediction（get_cognition 用）。",
+            },
+            "person_key": {
+                "type": "string",
+                "description": "人物标识（get_cognition_relationship 用）。",
+            },
+            "mode": {
+                "type": "string",
+                "enum": ["reactive", "force", "batch"],
+                "description": "管线模式（run_pipeline 用）。reactive=只跑脏引擎，force=强制，batch=全量。",
+            },
+            "engines": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "强制执行的引擎列表（run_pipeline mode=force 用）。",
             },
             "limit": {
                 "type": "integer",
@@ -151,6 +189,38 @@ class OntologyTool(BaseTool):
                 error=f"Ontology API {resp.status_code}: {resp.text[:500]}",
             )
 
+        try:
+            data = resp.json()
+            pretty = json.dumps(data, ensure_ascii=False, indent=2)
+        except ValueError:
+            pretty = resp.text
+        return ToolResult(success=True, output=pretty)
+
+    async def _post(
+        self, path: str, body: dict[str, Any] | None = None
+    ) -> ToolResult:
+        url = f"{self.base_url}{path}"
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(url, json=body or {})
+        except httpx.ConnectError as exc:
+            return ToolResult(
+                success=False, output="",
+                error=f"Cannot reach ontology API at {self.base_url}: {exc}.",
+            )
+        except httpx.TimeoutException:
+            return ToolResult(
+                success=False, output="",
+                error=f"Ontology API timed out after {self.timeout:.0f}s.",
+            )
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult(success=False, output="", error=f"HTTP error: {exc}")
+
+        if resp.status_code >= 400:
+            return ToolResult(
+                success=False, output="",
+                error=f"Ontology API {resp.status_code}: {resp.text[:500]}",
+            )
         try:
             data = resp.json()
             pretty = json.dumps(data, ensure_ascii=False, indent=2)
@@ -268,6 +338,67 @@ class OntologyTool(BaseTool):
                 return await self._get(
                     f"/api/lebenswelt/{self.ontology_id}/geography"
                 )
+
+            # ---- 新增端点
+
+            if op == "get_object_timeline":
+                oid = params.get("object_id")
+                if not oid:
+                    return ToolResult(success=False, output="", error="'object_id' is required.")
+                return await self._get(f"/api/objects/{oid}/timeline")
+
+            if op == "get_relator_synthesis":
+                rid = params.get("relator_id")
+                if not rid:
+                    return ToolResult(success=False, output="", error="'relator_id' is required.")
+                return await self._get(f"/api/relators/{rid}/synthesis")
+
+            if op == "get_dashboard":
+                return await self._get(f"/api/dashboard/{self.ontology_id}")
+
+            if op == "get_month_absences":
+                month = params.get("month")
+                if not month:
+                    return ToolResult(success=False, output="", error="'month' (YYYY-MM) is required.")
+                return await self._get(f"/api/situation/{self.ontology_id}/{month}/absences")
+
+            if op == "get_situations":
+                return await self._get(f"/api/situation/{self.ontology_id}/situations")
+
+            if op == "get_chapters":
+                return await self._get(f"/api/ontologies/{self.ontology_id}/chapters")
+
+            if op == "get_cognition_summary":
+                return await self._get(f"/api/cognition/{self.ontology_id}/summary")
+
+            if op == "get_cognition":
+                kind = params.get("kind")
+                qp3: dict[str, Any] = {}
+                if kind:
+                    qp3["kind"] = kind
+                return await self._get(f"/api/cognition/{self.ontology_id}", qp3)
+
+            if op == "get_cognition_relationship":
+                pk = params.get("person_key")
+                if not pk:
+                    return ToolResult(success=False, output="", error="'person_key' is required.")
+                return await self._get(f"/api/cognition/{self.ontology_id}/relationship/{pk}")
+
+            if op == "get_graph":
+                return await self._get("/api/objects/graph")
+
+            if op == "get_social_evolution":
+                return await self._get("/api/objects/social-evolution")
+
+            if op == "get_graph_analytics":
+                return await self._get("/api/objects/analytics")
+
+            if op == "run_pipeline":
+                mode = params.get("mode", "reactive")
+                body: dict[str, Any] = {"mode": mode}
+                if mode == "force" and params.get("engines"):
+                    body["engines"] = params["engines"]
+                return await self._post("/api/pipeline/run", body)
 
         except Exception as exc:  # noqa: BLE001
             return ToolResult(

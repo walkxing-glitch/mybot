@@ -18,7 +18,7 @@
 - **code** — 代码读写搜索
 - **web_search** — DuckDuckGo 搜索
 - **web_fetch** — 网页抓取转 Markdown
-- **ontology** — 本体论查询（13 个操作）
+- **ontology** — 本体论引擎（27 个操作：查询/认知/图谱/情境/调度）
 - **neural_twin** — 数字分身调用（4 个操作）
 - **calendar** — SQLite 提醒日历
 - **memory** — 记忆存取（remember / recall / profile）
