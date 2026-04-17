@@ -10,7 +10,7 @@ from mybot.tools.base import BaseTool, ToolResult
 class PalaceTool(BaseTool):
     name = "palace"
     description = (
-        "查丽泽园记忆系统。可按坐标取原文 (get_raw_conversation)、"
+        "查丽泽SOHO双塔DNA记忆系统。可按坐标取原文 (get_raw_conversation)、"
         "列某天的抽屉 (list_day_drawers)、看中庭条目 (list_atrium / "
         "show_atrium_entry)、看统计 (stats)。"
     )

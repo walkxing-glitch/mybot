@@ -43,7 +43,7 @@ gateway:
     token: "${TELEGRAM_BOT_TOKEN}"
     polling_mode: true
 
-# 丽泽园记忆系统（mybot/palace）
+# 丽泽SOHO双塔DNA记忆系统（mybot/palace）
 # See docs/superpowers/specs/2026-04-16-mybot-memory-palace-design.md
 palace:
   enabled: true  # false → 回退到 legacy MemoryEngine

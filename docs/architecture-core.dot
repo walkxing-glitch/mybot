@@ -59,7 +59,7 @@ digraph mybot_core {
     subgraph cluster_palace {
         label=""; style=invis;
         palace [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4">
-            <TR><TD><B>🏰 丽泽园记忆宫殿</B></TD></TR>
+            <TR><TD><B>🏰 丽泽SOHO双塔DNA记忆系统</B></TD></TR>
             <TR><TD>palace/  ·  SQLite + sqlite-vec</TD></TR>
             <TR><TD> </TD></TR>
             <TR><TD ALIGN="LEFT">🏗 南楼：摘要 + 豆包 2048 维向量 + BM25</TD></TR>

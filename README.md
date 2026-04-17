@@ -1,6 +1,6 @@
 # MyBot
 
-个人 AI Agent — 通过 Telegram / CLI 与你对话，连接本体论知识图谱、数字分身神经网络和丽泽园记忆宫殿。
+个人 AI Agent — 通过 Telegram / CLI 与你对话，连接本体论知识图谱、数字分身神经网络和丽泽SOHO双塔DNA记忆系统。
 
 ![架构图](docs/architecture-core.png)
 
@@ -10,7 +10,7 @@
 |------|------|------|
 | **本体论** | "你的过去" — 人物/关系/事件/按月综合视图 | HTTP → myontology/ontology-engine :8003 |
 | **数字分身** | "你的判断" — 决策预测/异常检测/习惯分析 | HTTP → neural-twin :8004（13 个 Keras 模型） |
-| **丽泽园记忆宫殿** | "你的记忆" — 跨会话连续性，防"记忆生锈" | SQLite + sqlite-vec + 豆包 2048 维向量 |
+| **丽泽SOHO双塔DNA记忆系统** | "你的记忆" — 跨会话连续性，防"记忆生锈" | SQLite + sqlite-vec + 豆包 2048 维向量 |
 
 ## 工具（8 个）
 
@@ -104,14 +104,14 @@ launchctl load ~/Library/LaunchAgents/com.mybot.plist
 用户 (Telegram / CLI)
   → 网关层 (gateway/)
     → Agent 核心 (agent.py)
-      → 对话前：丽泽园召回记忆 → 注入 system prompt
+      → 对话前：丽泽SOHO召回记忆 → 注入 system prompt
       → DeepSeek LLM 生成回复
       → 工具并行调度（最多 10 轮，60s 超时）
     ← 返回文本
-  → 对话后：丽泽园异步归档
+  → 对话后：丽泽SOHO异步归档
 ```
 
-### 丽泽园记忆宫殿
+### 丽泽SOHO双塔DNA记忆系统
 
 防止"记忆生锈"（工具失败叙述被存为长期事实）的三道防线：
 
@@ -120,7 +120,7 @@ launchctl load ~/Library/LaunchAgents/com.mybot.plist
 3. **显式标记门禁** — 中庭只接受用户明确说"记住/以后别"的内容
 
 ```
-丽泽园
+丽泽SOHO双塔
 ├── 北楼：原始对话存档
 ├── 南楼：摘要 + 2048 维向量 + BM25 全文索引
 │   └── 10 间固定房间（消费/工作/人际/健康/学习/技术/项目/家庭/出行/情绪）

@@ -66,7 +66,7 @@ digraph mybot {
 
     // ===== Memory Palace =====
     subgraph cluster_palace {
-        label="丽泽园记忆宫殿  palace/"; labeljust=l; style=rounded; color="#E0E0E0"; fillcolor="#E8EAF6"; fontsize=13; fontcolor="#333333";
+        label="丽泽SOHO双塔DNA记忆系统  palace/"; labeljust=l; style=rounded; color="#E0E0E0"; fillcolor="#E8EAF6"; fontsize=13; fontcolor="#333333";
         node [fillcolor="#C5CAE9", color="#283593"];
 
         palace_facade [label="MemoryPalace\n门面 + Agent shim", penwidth=2];

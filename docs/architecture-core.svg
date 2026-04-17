@@ -45,7 +45,7 @@
 <g id="node3" class="node">
 <title>ontology</title>
 <polygon fill="#e8f5e9" stroke="#2e7d32" stroke-width="2" points="287.55,-355.06 0,-355.06 0,-141.9 287.55,-141.9 287.55,-355.06"/>
-<text text-anchor="start" x="111.52" y="-330.97" font-family="PingFang SC,Helvetica Neue" font-weight="bold" font-size="11.00">🏛 知识图谱</text>
+<text text-anchor="start" x="117.15" y="-330.97" font-family="PingFang SC,Helvetica Neue" font-weight="bold" font-size="11.00">🏛 本体论</text>
 <text text-anchor="start" x="44.4" y="-304.34" font-family="PingFang SC,Helvetica Neue" font-size="11.00">myontology / ontology&#45;engine :8003</text>
 <text text-anchor="start" x="141.9" y="-282.84" font-family="PingFang SC,Helvetica Neue" font-size="11.00"> </text>
 <text text-anchor="start" x="20.4" y="-261.34" font-family="PingFang SC,Helvetica Neue" font-size="11.00">📋 实体搜索 · 人物查找 · 关系网络</text>
@@ -87,7 +87,7 @@
 <g id="node5" class="node">
 <title>palace</title>
 <polygon fill="#e8eaf6" stroke="#283593" stroke-width="2" points="932.17,-367.68 633.38,-367.68 633.38,-129.28 932.17,-129.28 932.17,-367.68"/>
-<text text-anchor="start" x="733.65" y="-343.59" font-family="PingFang SC,Helvetica Neue" font-weight="bold" font-size="11.00">🏰 丽泽园记忆宫殿</text>
+<text text-anchor="start" x="697.27" y="-343.59" font-family="PingFang SC,Helvetica Neue" font-weight="bold" font-size="11.00">🏰 丽泽SOHO双塔DNA记忆系统</text>
 <text text-anchor="start" x="700.65" y="-316.97" font-family="PingFang SC,Helvetica Neue" font-size="11.00">palace/ &#160;· &#160;SQLite + sqlite&#45;vec</text>
 <text text-anchor="start" x="780.9" y="-295.47" font-family="PingFang SC,Helvetica Neue" font-size="11.00"> </text>
 <text text-anchor="start" x="653.77" y="-273.97" font-family="PingFang SC,Helvetica Neue" font-size="11.00">🏗 南楼：摘要 + 豆包 2048 维向量 + BM25</text>
