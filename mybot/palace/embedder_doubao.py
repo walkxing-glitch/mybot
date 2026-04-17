@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 API_URL = "https://ark.cn-beijing.volces.com/api/v3/embeddings/multimodal"
 DEFAULT_MODEL = "doubao-embedding-vision-251215"
-DEFAULT_KEY = "REDACTED_DOUBAO_API_KEY"
+DEFAULT_KEY = ""
 
 
 class DoubaoEmbedder:
