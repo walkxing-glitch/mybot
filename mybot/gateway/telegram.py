@@ -11,11 +11,13 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 from telegram import Update
-from telegram.constants import ChatAction
+from telegram.constants import ChatAction, ParseMode
 from telegram.error import TelegramError
 from telegram.ext import (
     Application,
@@ -32,20 +34,31 @@ logger = logging.getLogger(__name__)
 
 
 WELCOME_TEXT = (
-    "你好，我是 MyBot —— 邢智强的个人 AI 助手。\n\n"
-    "直接发消息就能对话。\n"
-    "可用命令：\n"
-    "  /start  显示欢迎语\n"
-    "  /help   使用说明\n"
-    "  /reset  清空当前会话历史\n"
+    "🤖 <b>MyBot</b> — 邢智强的个人 AI 助手\n"
+    "\n"
+    "直接发消息即可对话。\n"
+    "\n"
+    "📌 <b>命令</b>\n"
+    "/start — 显示欢迎语\n"
+    "/help — 使用说明\n"
+    "/reset — 清空当前会话历史"
 )
 
 
 HELP_TEXT = (
-    "使用说明：\n"
-    "• 直接输入文本即可开始对话。\n"
-    "• 长任务我会先回「处理中…」，完成后再发最终结果。\n"
-    "• /reset 会清空当前 chat 的会话上下文。\n"
+    "📖 <b>使用说明</b>\n"
+    "\n"
+    "• 直接输入文本即可开始对话\n"
+    "• 长任务我会先回「⏳ 思考中…」，完成后发最终结果\n"
+    "• /reset 会清空当前对话上下文\n"
+    "\n"
+    "🧰 <b>能力</b>\n"
+    "• 知识图谱查询（人物/关系/事件）\n"
+    "• 数字分身决策（该不该买/消费预测）\n"
+    "• 网页搜索与抓取\n"
+    "• 代码读写与命令执行\n"
+    "• 日历提醒管理\n"
+    "• 长期记忆（丽泽园记忆宫殿）"
 )
 
 
@@ -61,13 +74,17 @@ def _session_id_for(update: Update) -> str:
 async def _cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_message is None:
         return
-    await update.effective_message.reply_text(WELCOME_TEXT)
+    await update.effective_message.reply_text(
+        WELCOME_TEXT, parse_mode=ParseMode.HTML,
+    )
 
 
 async def _cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_message is None:
         return
-    await update.effective_message.reply_text(HELP_TEXT)
+    await update.effective_message.reply_text(
+        HELP_TEXT, parse_mode=ParseMode.HTML,
+    )
 
 
 async def _cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -76,7 +93,7 @@ async def _cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
     sid = _session_id_for(update)
     agent.reset_session(sid)
-    await update.effective_message.reply_text("会话历史已清空。")
+    await update.effective_message.reply_text("✅ 会话历史已清空。")
 
 
 async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -105,7 +122,7 @@ async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     placeholder = None
     try:
-        placeholder = await message.reply_text("处理中…")
+        placeholder = await message.reply_text("⏳ <i>思考中…</i>", parse_mode=ParseMode.HTML)
     except TelegramError as exc:
         logger.warning("failed to send placeholder: %s", exc)
 
@@ -147,20 +164,10 @@ async def _deliver_reply(
     placeholder: Any,
     reply: str,
 ) -> None:
-    """把 agent 回复投递给用户。
-
-    策略：
-    - 回复较短（≤ 3800 字符）且有占位消息：直接编辑占位消息。
-      注意：编辑不触发推送通知——所以我们额外再发一条空提示的空消息？
-      不行，会冗余。实际做法：长任务仍以发新消息为主，占位删除。
-    - 回复超长：切块发送（每块 ≤ 3800）。
-    - 任何 Telegram 异常：退化为 original_message.reply_text 纯文本新消息。
-    """
+    """把 agent 回复投递给用户（HTML 格式化，失败退化纯文本）。"""
     CHUNK = 3800
     chunks = _chunk_text(reply, CHUNK)
 
-    # 长任务完成——优先发新消息（会触发通知）。
-    # 但如果占位还在，先删掉它避免刷屏。
     if placeholder is not None:
         try:
             await placeholder.delete()
@@ -168,16 +175,116 @@ async def _deliver_reply(
             logger.debug("placeholder delete failed: %s", exc)
 
     for chunk in chunks:
+        html_chunk = _md_to_tg_html(chunk)
+        sent = False
+        # 优先 HTML
         try:
-            await original_message.reply_text(chunk)
+            await original_message.reply_text(
+                html_chunk, parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+            sent = True
         except TelegramError as exc:
-            logger.warning("reply_text failed: %s", exc)
-            # 最后的挣扎：不格式化，直接纯文本
+            logger.debug("HTML reply failed (%s), falling back to plain", exc)
+        # 退化纯文本
+        if not sent:
             try:
                 await original_message.reply_text(chunk[:4000])
             except TelegramError:
                 logger.error("final reply attempt failed, giving up chunk")
                 return
+
+
+def _md_to_tg_html(text: str) -> str:
+    """Best-effort Markdown → Telegram HTML.
+
+    Handles: code blocks, inline code, bold, italic, strikethrough,
+    links, headers, horizontal rules, ordered/unordered lists.
+    Falls back gracefully — if conversion produces broken HTML,
+    the caller retries with plain text.
+    """
+    # Escape HTML entities first (before we add our own tags)
+    # But preserve markdown syntax characters
+    lines = text.split("\n")
+    result: list[str] = []
+    in_code_block = False
+    code_buf: list[str] = []
+
+    for line in lines:
+        # fenced code blocks
+        if re.match(r"^```", line):
+            if in_code_block:
+                result.append("<pre>" + html.escape("\n".join(code_buf)) + "</pre>")
+                code_buf = []
+                in_code_block = False
+            else:
+                in_code_block = True
+            continue
+        if in_code_block:
+            code_buf.append(line)
+            continue
+
+        # process normal line
+        line = _convert_inline(line)
+        result.append(line)
+
+    # unclosed code block
+    if code_buf:
+        result.append("<pre>" + html.escape("\n".join(code_buf)) + "</pre>")
+
+    return "\n".join(result)
+
+
+def _convert_inline(line: str) -> str:
+    """Convert a single line's markdown to HTML."""
+    # headers → bold
+    m = re.match(r"^(#{1,6})\s+(.+)$", line)
+    if m:
+        content = html.escape(m.group(2))
+        return f"\n<b>{content}</b>\n"
+
+    # horizontal rule
+    if re.match(r"^[-*_]{3,}\s*$", line):
+        return "———"
+
+    # escape HTML in the line first, then apply formatting
+    # We need to be careful: escape first, then add tags
+    escaped = html.escape(line)
+
+    # inline code (must be before bold/italic to avoid conflicts)
+    escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+
+    # bold: **text** or __text__
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escaped)
+    escaped = re.sub(r"__(.+?)__", r"<b>\1</b>", escaped)
+
+    # italic: *text* or _text_ (but not inside words with underscores)
+    escaped = re.sub(r"(?<!\w)\*([^*]+?)\*(?!\w)", r"<i>\1</i>", escaped)
+    escaped = re.sub(r"(?<!\w)_([^_]+?)_(?!\w)", r"<i>\1</i>", escaped)
+
+    # strikethrough: ~~text~~
+    escaped = re.sub(r"~~(.+?)~~", r"<s>\1</s>", escaped)
+
+    # links: [text](url)
+    escaped = re.sub(
+        r"\[([^\]]+)\]\(([^)]+)\)",
+        r'<a href="\2">\1</a>',
+        escaped,
+    )
+
+    # unordered list: - item or * item
+    m2 = re.match(r"^(\s*)[*\-]\s+(.+)$", escaped)
+    if m2:
+        indent = "  " * (len(m2.group(1)) // 2)
+        return f"{indent}• {m2.group(2)}"
+
+    # ordered list: 1. item
+    m3 = re.match(r"^(\s*)(\d+)\.\s+(.+)$", escaped)
+    if m3:
+        indent = "  " * (len(m3.group(1)) // 2)
+        return f"{indent}{m3.group(2)}. {m3.group(3)}"
+
+    return escaped
 
 
 def _chunk_text(text: str, size: int) -> list[str]:
@@ -206,7 +313,7 @@ async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     if isinstance(update, Update) and update.effective_message is not None:
         try:
             await update.effective_message.reply_text(
-                "我这边出了点小问题，请稍后再试一次。"
+                "⚠️ 我这边出了点小问题，请稍后再试一次。"
             )
         except TelegramError:
             pass
