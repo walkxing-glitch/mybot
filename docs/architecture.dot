@@ -1,0 +1,180 @@
+digraph mybot {
+    // Global
+    rankdir=TB;
+    fontname="Helvetica Neue";
+    node [fontname="Helvetica Neue", fontsize=11, style=filled, shape=box, margin="0.15,0.08"];
+    edge [fontname="Helvetica Neue", fontsize=9, color="#666666"];
+    bgcolor="white";
+    compound=true;
+    newrank=true;
+
+    // ===== User Layer =====
+    subgraph cluster_user {
+        label="用户接入"; labeljust=l; style=rounded; color="#E0E0E0"; fillcolor="#FAFAFA"; fontsize=13; fontcolor="#333333";
+        node [fillcolor="#E3F2FD", color="#1976D2"];
+        telegram [label="Telegram\n@xingzhiqiang_claude_fst_bot", shape=box];
+        cli [label="CLI REPL\nRich 终端"];
+    }
+
+    // ===== Gateway Layer =====
+    subgraph cluster_gateway {
+        label="网关层  gateway/"; labeljust=l; style=rounded; color="#E0E0E0"; fillcolor="#FAFAFA"; fontsize=13; fontcolor="#333333";
+        node [fillcolor="#E8F5E9", color="#388E3C"];
+        gw_telegram [label="telegram.py\n长轮询 + HTML 格式化"];
+        gw_cli [label="cli.py\nRich Markdown 渲染"];
+    }
+
+    // ===== Agent Core =====
+    subgraph cluster_agent {
+        label="Agent 核心"; labeljust=l; style=rounded; color="#E0E0E0"; fillcolor="#FFF8E1"; fontsize=13; fontcolor="#333333";
+        node [fillcolor="#FFF9C4", color="#F9A825"];
+        agent [label="agent.py\nchat loop\ntool dispatch (并行, max 10轮)\nsession 管理 (max 40条)", shape=box, penwidth=2];
+    }
+
+    // ===== LLM =====
+    subgraph cluster_llm {
+        label="LLM 层"; labeljust=l; style=rounded; color="#E0E0E0"; fillcolor="#FAFAFA"; fontsize=13; fontcolor="#333333";
+        node [fillcolor="#F3E5F5", color="#7B1FA2"];
+        llm [label="llm.py\nLiteLLM 多模型路由\n重试 + fallback"];
+    }
+
+    // ===== Tools =====
+    subgraph cluster_tools {
+        label="工具层  tools/  (8 个)"; labeljust=l; style=rounded; color="#E0E0E0"; fillcolor="#FAFAFA"; fontsize=13; fontcolor="#333333";
+        node [fillcolor="#FCE4EC", color="#C62828"];
+
+        subgraph cluster_tools_local {
+            label="本地工具"; style=dashed; color="#BDBDBD"; fillcolor="#FFF5F5";
+            tool_shell [label="shell\n白名单命令"];
+            tool_code [label="code\n读/写/搜索"];
+            tool_calendar [label="calendar\nSQLite 提醒"];
+            tool_web [label="web\n搜索 + 抓取"];
+        }
+
+        subgraph cluster_tools_memory {
+            label="记忆工具"; style=dashed; color="#BDBDBD"; fillcolor="#FFF5F5";
+            tool_memory [label="memory\nremember / recall"];
+            tool_palace [label="palace_tool\nlist / show / stats"];
+        }
+
+        subgraph cluster_tools_remote {
+            label="远程调用"; style=dashed; color="#BDBDBD"; fillcolor="#FFF5F5";
+            tool_ontology [label="ontology\n13 ops → :8003"];
+            tool_neural [label="neural_twin\n4 ops → :8004"];
+        }
+    }
+
+    // ===== Memory Palace =====
+    subgraph cluster_palace {
+        label="丽泽园记忆宫殿  palace/"; labeljust=l; style=rounded; color="#E0E0E0"; fillcolor="#E8EAF6"; fontsize=13; fontcolor="#333333";
+        node [fillcolor="#C5CAE9", color="#283593"];
+
+        palace_facade [label="MemoryPalace\n门面 + Agent shim", penwidth=2];
+
+        subgraph cluster_palace_write {
+            label="写入路径"; style=dashed; color="#7986CB"; fillcolor="#E8EAF6";
+            chunker [label="chunker\nLLM 分段摘要"];
+            router [label="router\nLLM 话题→房间"];
+            writer [label="writer\n归档 pipeline"];
+        }
+
+        subgraph cluster_palace_read {
+            label="读取路径"; style=dashed; color="#7986CB"; fillcolor="#E8EAF6";
+            retriever [label="retriever\nvec+FTS → RRF"];
+            atrium [label="atrium\n规则/偏好/事实"];
+        }
+
+        subgraph cluster_palace_infra {
+            label="基础设施"; style=dashed; color="#7986CB"; fillcolor="#E8EAF6";
+            store [label="store.py\napsw + sqlite-vec"];
+            embedder [label="embedder_doubao\n豆包 API 2048维"];
+            palace_db [label="palace.db\nSQLite + WAL", shape=cylinder, fillcolor="#BBDEFB"];
+        }
+
+        subgraph cluster_palace_guard {
+            label="防锈三道闸"; style=dashed; color="#EF5350"; fillcolor="#FFEBEE";
+            node [fillcolor="#FFCDD2", color="#C62828"];
+            guard_sql [label="SQL 触发器\n黑名单 8 词"];
+            guard_code [label="代码层\n_is_blacklisted"];
+            guard_explicit [label="显式标记门禁\n记住/以后别/..."];
+        }
+    }
+
+    // ===== External Services =====
+    subgraph cluster_external {
+        label="外部服务"; labeljust=l; style=rounded; color="#E0E0E0"; fillcolor="#FAFAFA"; fontsize=13; fontcolor="#333333";
+        node [fillcolor="#E0F7FA", color="#00838F", shape=box3d];
+        deepseek [label="DeepSeek API\ndeepseek-chat"];
+        doubao_api [label="豆包 API\nembedding 2048维"];
+        ontology_engine [label="ontology-engine\n:8003  launchd"];
+        neural_twin_svc [label="neural-twin\n:8004  launchd"];
+        duckduckgo [label="DuckDuckGo\n搜索 API"];
+        telegram_api [label="Telegram Bot API"];
+    }
+
+    // ===== Edges =====
+
+    // User → Gateway
+    telegram -> gw_telegram;
+    cli -> gw_cli;
+
+    // Gateway → Agent
+    gw_telegram -> agent [label="chat()"];
+    gw_cli -> agent [label="chat()"];
+
+    // Agent → LLM
+    agent -> llm [label="completion()"];
+    llm -> deepseek [label="HTTP"];
+
+    // Agent → Tools
+    agent -> tool_shell [label="并行调用", lhead=cluster_tools];
+    agent -> tool_code [style=invis];
+    agent -> tool_calendar [style=invis];
+    agent -> tool_web;
+    agent -> tool_memory;
+    agent -> tool_palace [style=invis];
+    agent -> tool_ontology;
+    agent -> tool_neural;
+
+    // Tool → External
+    tool_ontology -> ontology_engine [label="HTTP"];
+    tool_neural -> neural_twin_svc [label="HTTP"];
+    tool_web -> duckduckgo [label="HTTP"];
+    gw_telegram -> telegram_api [label="长轮询"];
+
+    // Agent ↔ Palace
+    agent -> palace_facade [label="assemble_context()\n(每轮对话前)", color="#283593", fontcolor="#283593"];
+    agent -> palace_facade [label="archive_session()\n(异步, 对话后)", style=dashed, color="#283593", fontcolor="#283593"];
+
+    // Palace internal
+    palace_facade -> retriever [label="search"];
+    palace_facade -> atrium [label="assemble_block"];
+    palace_facade -> writer [label="archive"];
+
+    writer -> chunker;
+    writer -> router;
+    writer -> embedder;
+    writer -> store;
+
+    retriever -> store;
+    retriever -> embedder;
+    atrium -> store;
+
+    store -> palace_db;
+    embedder -> doubao_api [label="HTTP"];
+
+    // Guards
+    writer -> guard_code [style=dashed, color="#C62828"];
+    store -> guard_sql [style=dashed, color="#C62828", label="BEFORE INSERT"];
+    writer -> guard_explicit [style=dashed, color="#C62828"];
+
+    // Memory tool → Palace
+    tool_memory -> palace_facade [label="remember/recall"];
+    tool_palace -> palace_facade [label="list/show/stats"];
+
+    // Layout hints
+    {rank=same; telegram; cli}
+    {rank=same; gw_telegram; gw_cli}
+    {rank=same; tool_shell; tool_code; tool_calendar; tool_web; tool_memory; tool_palace; tool_ontology; tool_neural}
+    {rank=same; deepseek; doubao_api; ontology_engine; neural_twin_svc; duckduckgo; telegram_api}
+}

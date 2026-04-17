@@ -1,0 +1,107 @@
+digraph mybot_core {
+    // Global
+    rankdir=TB;
+    fontname="PingFang SC,Helvetica Neue";
+    node [fontname="PingFang SC,Helvetica Neue", fontsize=12, style=filled, shape=box, margin="0.2,0.12"];
+    edge [fontname="PingFang SC,Helvetica Neue", fontsize=10, color="#555555"];
+    bgcolor="white";
+    compound=true;
+    splines=ortho;
+    nodesep=0.8;
+    ranksep=0.9;
+
+    // ===== User =====
+    user [label="👤 邢智强\nTelegram / CLI", shape=box, fillcolor="#E3F2FD", color="#1565C0", penwidth=2, fontsize=14];
+
+    // ===== Agent =====
+    subgraph cluster_agent {
+        label=""; style=invis;
+        agent [label="🤖 MyBot Agent\n\nDeepSeek LLM  ·  工具并行调度\n会话管理  ·  记忆注入",
+               shape=box, fillcolor="#FFF9C4", color="#F57F17", penwidth=3, fontsize=13,
+               width=4.5, height=1.2];
+    }
+
+    // ===== Three Pillars =====
+
+    // Ontology
+    subgraph cluster_ontology {
+        label=""; style=invis;
+        ontology [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4">
+            <TR><TD><B>🏛 本体论</B></TD></TR>
+            <TR><TD>myontology / ontology-engine :8003</TD></TR>
+            <TR><TD> </TD></TR>
+            <TR><TD ALIGN="LEFT">📋 实体搜索 · 人物查找 · 关系网络</TD></TR>
+            <TR><TD ALIGN="LEFT">📅 按月综合视图（地点+人+微信+财务+照片）</TD></TR>
+            <TR><TD ALIGN="LEFT">📖 人生叙事 · 习惯分析 · 地理画像</TD></TR>
+            <TR><TD> </TD></TR>
+            <TR><TD><FONT COLOR="#666666"><I>"你的过去" — 发生了什么</I></FONT></TD></TR>
+        </TABLE>>,
+        shape=box, fillcolor="#E8F5E9", color="#2E7D32", penwidth=2, fontsize=11];
+    }
+
+    // Neural Twin
+    subgraph cluster_neural {
+        label=""; style=invis;
+        neural [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4">
+            <TR><TD><B>🧠 数字分身</B></TD></TR>
+            <TR><TD>neural-twin :8004</TD></TR>
+            <TR><TD> </TD></TR>
+            <TR><TD ALIGN="LEFT">⚖️ 决策预测（该不该买？score + σ）</TD></TR>
+            <TR><TD ALIGN="LEFT">🔍 异常检测（消费偏离历史模式）</TD></TR>
+            <TR><TD ALIGN="LEFT">📊 习惯分析 · 日预测</TD></TR>
+            <TR><TD> </TD></TR>
+            <TR><TD><FONT COLOR="#666666"><I>"你的判断" — 该怎么做</I></FONT></TD></TR>
+        </TABLE>>,
+        shape=box, fillcolor="#F3E5F5", color="#6A1B9A", penwidth=2, fontsize=11];
+    }
+
+    // Palace
+    subgraph cluster_palace {
+        label=""; style=invis;
+        palace [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4">
+            <TR><TD><B>🏰 丽泽园记忆宫殿</B></TD></TR>
+            <TR><TD>palace/  ·  SQLite + sqlite-vec</TD></TR>
+            <TR><TD> </TD></TR>
+            <TR><TD ALIGN="LEFT">🏗 南楼：摘要 + 豆包 2048 维向量 + BM25</TD></TR>
+            <TR><TD ALIGN="LEFT">📜 北楼：原始对话存档</TD></TR>
+            <TR><TD ALIGN="LEFT">⚓ 中庭：永久规则 / 偏好 / 事实</TD></TR>
+            <TR><TD ALIGN="LEFT">🛡 防锈：SQL 黑名单 + 代码过滤 + 显式标记门禁</TD></TR>
+            <TR><TD> </TD></TR>
+            <TR><TD><FONT COLOR="#666666"><I>"你的记忆" — 跨会话连续性</I></FONT></TD></TR>
+        </TABLE>>,
+        shape=box, fillcolor="#E8EAF6", color="#283593", penwidth=2, fontsize=11];
+    }
+
+    // ===== Data Sources =====
+    subgraph cluster_data {
+        label="数据来源"; labeljust=l; style=rounded; color="#BDBDBD"; fillcolor="#FAFAFA"; fontsize=11; fontcolor="#888888";
+        node [fillcolor="#ECEFF1", color="#90A4AE", fontsize=10, shape=box];
+
+        db_postgres [label="PostgreSQL\n16191 实体 · 805 关系\n12523 事件 · 190 人物"];
+        db_keras [label="13 个 Keras 模型\n消费/行为/决策\n从零训练的神经网络"];
+        db_palace [label="palace.db\n按日归档 · 10 间房\n向量+全文混合召回"];
+    }
+
+    // ===== Edges =====
+
+    // User ↔ Agent
+    user -> agent [label="消息", penwidth=2, color="#1565C0"];
+    agent -> user [label="回复", penwidth=2, color="#1565C0"];
+
+    // Agent → Three pillars
+    agent -> ontology [label="  HTTP 调用\n  13 个 operation  ", color="#2E7D32", penwidth=1.5];
+    agent -> neural [label="  HTTP 调用\n  4 个 operation  ", color="#6A1B9A", penwidth=1.5];
+    agent -> palace [label="  对话前：召回记忆\n  对话后：异步归档  ", color="#283593", penwidth=1.5, style=bold];
+
+    // Pillars → Data
+    ontology -> db_postgres [color="#2E7D32", style=dashed];
+    neural -> db_keras [color="#6A1B9A", style=dashed];
+    palace -> db_palace [color="#283593", style=dashed];
+
+    // Cross-connections
+    palace -> agent [label="注入 system prompt", color="#283593", style=dashed, constraint=false];
+
+    // Layout
+    {rank=same; ontology; neural; palace}
+    {rank=same; db_postgres; db_keras; db_palace}
+}
