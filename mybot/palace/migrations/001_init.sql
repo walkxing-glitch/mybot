@@ -46,7 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_south_room_type ON south_drawer(room_type, room_l
 
 CREATE VIRTUAL TABLE IF NOT EXISTS south_vec USING vec0(
     drawer_id TEXT PRIMARY KEY,
-    embedding FLOAT[1024]
+    embedding FLOAT[{dim}]
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS south_fts USING fts5(
@@ -96,7 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_atrium_type   ON atrium_entry(entry_type, status)
 
 CREATE VIRTUAL TABLE IF NOT EXISTS atrium_vec USING vec0(
     entry_id  TEXT PRIMARY KEY,
-    embedding FLOAT[1024]
+    embedding FLOAT[{dim}]
 );
 
 CREATE TABLE IF NOT EXISTS atrium_changelog (

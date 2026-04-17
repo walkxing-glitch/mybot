@@ -77,8 +77,7 @@ class PalaceStore:
             "WHERE type='table' AND name='north_drawer'"
         ).fetchone()
         if row is None:
-            sql = MIGRATION_PATH.read_text()
-            # apsw: iterate cursor so every statement in the script runs
+            sql = MIGRATION_PATH.read_text().replace("{dim}", str(self.cfg.embedder_dim))
             for _ in self._conn.execute(sql):
                 pass
 

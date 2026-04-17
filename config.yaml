@@ -49,9 +49,9 @@ palace:
   enabled: true  # false → 回退到 legacy MemoryEngine
   db_path: data/palace.db
   current_year_scope: 3
-  embedder: BAAI/bge-m3
-  embedder_dim: 1024
-  reranker: BAAI/bge-reranker-v2-m3
+  embedder: doubao
+  embedder_dim: 2048
+  reranker: none
   top_k_south: 5
   top_k_fact: 3
 

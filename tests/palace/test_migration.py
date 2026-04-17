@@ -20,7 +20,7 @@ def _open_with_vec(db_path):
 def test_migration_001_runs_clean(tmp_path):
     db = tmp_path / "palace.db"
     conn = _open_with_vec(db)
-    sql = MIGRATION_PATH.read_text()
+    sql = MIGRATION_PATH.read_text().replace("{dim}", "1024")
     for _ in conn.execute(sql):
         pass
 
@@ -39,7 +39,7 @@ def test_migration_001_runs_clean(tmp_path):
 def test_migration_is_idempotent(tmp_path):
     db = tmp_path / "palace.db"
     conn = _open_with_vec(db)
-    sql = MIGRATION_PATH.read_text()
+    sql = MIGRATION_PATH.read_text().replace("{dim}", "1024")
     for _ in conn.execute(sql):
         pass
     # Running it a second time must not error.

@@ -380,30 +380,45 @@ async def _try_build_palace(config: Any) -> Any:
             return ""
 
     try:
-        from mybot.palace.embedder import Embedder
-        from mybot.palace.reranker import Reranker
-        embedder = Embedder(
-            model_name=pcfg.embedder, dim=pcfg.embedder_dim,
-        )
-        # Eagerly verify embedder works — bge-m3 needs torch>=2.4.
-        # If this fails, we should fall back to MemoryEngine rather than
-        # crashing the first time an archive/retrieve runs.
+        embedder = _build_embedder(pcfg)
         _ = embedder.encode("palace startup probe")
-        reranker = Reranker(model_name=pcfg.reranker)
+        reranker = _build_reranker(pcfg)
         palace = MemoryPalace(
             cfg=pcfg, llm=llm_call,
             embedder=embedder, reranker=reranker,
         )
         await palace.initialize()
-        logger.info("MemoryPalace initialized: %s", pcfg.db_path)
+        logger.info("MemoryPalace initialized (%s, dim=%d): %s",
+                     pcfg.embedder, pcfg.embedder_dim, pcfg.db_path)
         return palace
     except Exception as exc:  # noqa: BLE001
         logger.warning(
-            "MemoryPalace init failed (%s); falling back to legacy engine. "
-            "Hint: pip install 'torch>=2.4' FlagEmbedding",
+            "MemoryPalace init failed (%s); falling back to legacy engine.",
             exc,
         )
         return None
+
+
+def _build_embedder(pcfg: Any) -> Any:
+    if pcfg.embedder == "doubao":
+        from mybot.palace.embedder_doubao import DoubaoEmbedder
+        return DoubaoEmbedder(dim=pcfg.embedder_dim)
+    from mybot.palace.embedder import Embedder
+    return Embedder(model_name=pcfg.embedder, dim=pcfg.embedder_dim)
+
+
+def _build_reranker(pcfg: Any) -> Any:
+    if pcfg.reranker == "none":
+        return _NullReranker()
+    from mybot.palace.reranker import Reranker
+    return Reranker(model_name=pcfg.reranker)
+
+
+class _NullReranker:
+    """No-op reranker — retriever falls back to RRF order."""
+    model_name = "none"
+    def rerank(self, query: str, docs: list) -> list:
+        return []
 
 
 def _config_as_dict(config: Any) -> dict[str, Any]:

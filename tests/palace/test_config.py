@@ -28,7 +28,8 @@ def test_from_repo_config_yaml():
     assert cfg.fixed_rooms[10] == "情绪"
     assert "不可用" in cfg.guards.blacklist_patterns
     assert "连接失败" in cfg.guards.blacklist_patterns
-    assert cfg.embedder == "BAAI/bge-m3"
+    assert cfg.embedder == "doubao"
+    assert cfg.embedder_dim == 2048
 
 
 def test_from_dict_overrides():
