@@ -22,47 +22,46 @@ class PalaceClient:
 
     def __init__(self, base_url: str = "http://localhost:8004", timeout: float = 30.0):
         self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
+        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=timeout)
+
+    async def close(self) -> None:
+        await self._client.aclose()
 
     async def get_context_for_prompt(self, query: str) -> str:
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as c:
-                resp = await c.post(f"{self.base_url}/session/context", json={"query": query})
-                resp.raise_for_status()
-                return resp.json().get("context", "")
+            resp = await self._client.post("/session/context", json={"query": query})
+            resp.raise_for_status()
+            return resp.json().get("context", "")
         except Exception as exc:
             logger.warning("Palace context failed: %s", exc)
             return ""
 
     async def end_session(self, session_id: str, conversation_messages: list[dict[str, Any]]) -> dict[str, Any]:
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as c:
-                resp = await c.post(
-                    f"{self.base_url}/session/archive",
-                    json={"session_id": session_id, "messages": conversation_messages},
-                )
-                resp.raise_for_status()
-                return resp.json()
+            resp = await self._client.post(
+                "/session/archive",
+                json={"session_id": session_id, "messages": conversation_messages},
+            )
+            resp.raise_for_status()
+            return resp.json()
         except Exception as exc:
             logger.warning("Palace archive failed: %s", exc)
             return {"session_id": session_id, "north_ids": [], "south_ids": [], "atrium_ids": [], "merge_count": 0}
 
     async def get_stats(self) -> dict[str, int]:
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as c:
-                resp = await c.get(f"{self.base_url}/stats")
-                resp.raise_for_status()
-                return resp.json()
+            resp = await self._client.get("/stats")
+            resp.raise_for_status()
+            return resp.json()
         except Exception as exc:
             logger.warning("Palace stats failed: %s", exc)
             return {}
 
     async def get_day_room_map(self, date: str) -> dict:
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as c:
-                resp = await c.get(f"{self.base_url}/drawers/{date}")
-                resp.raise_for_status()
-                return resp.json()
+            resp = await self._client.get(f"/drawers/{date}")
+            resp.raise_for_status()
+            return resp.json()
         except Exception as exc:
             logger.warning("Palace drawers failed: %s", exc)
             return {}
@@ -72,34 +71,31 @@ class PalaceClient:
             params: dict[str, str] = {"status": status}
             if entry_type:
                 params["entry_type"] = entry_type
-            async with httpx.AsyncClient(timeout=self.timeout) as c:
-                resp = await c.get(f"{self.base_url}/atrium", params=params)
-                resp.raise_for_status()
-                return resp.json()
+            resp = await self._client.get("/atrium", params=params)
+            resp.raise_for_status()
+            return resp.json()
         except Exception as exc:
             logger.warning("Palace atrium list failed: %s", exc)
             return []
 
     async def get_atrium_entry(self, entry_id: str) -> dict | None:
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as c:
-                resp = await c.get(f"{self.base_url}/atrium/{entry_id}")
-                if resp.status_code == 404:
-                    return None
-                resp.raise_for_status()
-                return resp.json()
+            resp = await self._client.get(f"/atrium/{entry_id}")
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            return resp.json()
         except Exception as exc:
             logger.warning("Palace atrium get failed: %s", exc)
             return None
 
     async def get_drawer_raw(self, drawer_id: str) -> dict | None:
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as c:
-                resp = await c.get(f"{self.base_url}/drawers/{drawer_id}/raw")
-                if resp.status_code == 404:
-                    return None
-                resp.raise_for_status()
-                return resp.json()
+            resp = await self._client.get(f"/drawers/{drawer_id}/raw")
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            return resp.json()
         except Exception as exc:
             logger.warning("Palace drawer raw failed: %s", exc)
             return None
