@@ -1,5 +1,0 @@
-[
-  {"role": "user", "content": "我在北京花了多少钱？"},
-  {"role": "assistant", "content": "总计 69 万元。"},
-  {"role": "user", "content": "记住：别启动 myontology/backend"}
-]
