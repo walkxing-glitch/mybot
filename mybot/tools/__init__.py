@@ -67,7 +67,7 @@ class ToolRegistry:
 
         # memory_tool requires dependency injection (memory_engine), handled separately
         # by load_enabled_tools — skip it in auto-discovery.
-        SKIP_MODULES = {"base", "memory_tool"}
+        SKIP_MODULES = {"base", "memory_tool", "palace_client"}
 
         for info in pkgutil.iter_modules(pkg.__path__):
             if info.name.startswith("_") or info.name in SKIP_MODULES:
@@ -121,6 +121,16 @@ def load_enabled_tools(config: Any, memory_engine: Any = None) -> list[BaseTool]
             logger.debug("Registered tool: memory (with memory_engine)")
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to instantiate MemoryTool: %s", exc)
+
+    if "palace" in enabled and memory_engine is not None:
+        try:
+            from mybot.tools.palace_client import PalaceClient, PalaceHttpTool
+
+            if isinstance(memory_engine, PalaceClient):
+                tools.append(PalaceHttpTool(palace_client=memory_engine))
+                logger.debug("Registered tool: palace (HTTP)")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to instantiate PalaceHttpTool: %s", exc)
 
     return tools
 

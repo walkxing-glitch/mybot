@@ -345,80 +345,32 @@ async def run_cli_from_config(
 
 
 async def _try_build_palace(config: Any) -> Any:
-    """Try to construct MemoryPalace per config.palace.enabled.
+    """Try to construct PalaceClient per config.palace settings.
 
-    Returns None if palace is disabled or initialization fails — caller
-    should fall back to MemoryEngine.
+    Returns None if palace is disabled — caller should fall back to MemoryEngine.
     """
-    try:
-        from mybot.palace import MemoryPalace
-        from mybot.palace.config import PalaceConfig
-    except ImportError:
-        return None
-
     cfg_dict = getattr(config, "raw", None) or _config_as_dict(config)
     if not cfg_dict:
         return None
-    pcfg = PalaceConfig.from_dict(cfg_dict)
-    if not pcfg.enabled:
+
+    palace_cfg = cfg_dict.get("palace", {})
+    if not palace_cfg.get("enabled", False):
         return None
 
-    from mybot.llm import completion
-
-    async def llm_call(messages: list[dict[str, Any]]) -> str:
-        resp = await completion(messages=messages)
-        try:
-            msg = resp["choices"][0]["message"]
-            content = msg.get("content") or ""
-            if isinstance(content, list):
-                content = "".join(
-                    p.get("text", "") if isinstance(p, dict) else str(p)
-                    for p in content
-                )
-            return content
-        except (KeyError, IndexError, TypeError):
-            return ""
+    base_url = palace_cfg.get("base_url", "http://localhost:8004")
 
     try:
-        embedder = _build_embedder(pcfg)
-        _ = embedder.encode("palace startup probe")
-        reranker = _build_reranker(pcfg)
-        palace = MemoryPalace(
-            cfg=pcfg, llm=llm_call,
-            embedder=embedder, reranker=reranker,
-        )
-        await palace.initialize()
-        logger.info("MemoryPalace initialized (%s, dim=%d): %s",
-                     pcfg.embedder, pcfg.embedder_dim, pcfg.db_path)
-        return palace
+        from mybot.tools.palace_client import PalaceClient
+        client = PalaceClient(base_url=base_url)
+        stats = await client.get_stats()
+        if stats:
+            logger.info("PalaceClient connected to %s", base_url)
+        else:
+            logger.info("PalaceClient connected to %s (empty db)", base_url)
+        return client
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "MemoryPalace init failed (%s); falling back to legacy engine.",
-            exc,
-        )
+        logger.warning("PalaceClient init failed (%s); falling back.", exc)
         return None
-
-
-def _build_embedder(pcfg: Any) -> Any:
-    if pcfg.embedder == "doubao":
-        from mybot.palace.embedder_doubao import DoubaoEmbedder
-        return DoubaoEmbedder(dim=pcfg.embedder_dim)
-    from mybot.palace.embedder import Embedder
-    return Embedder(model_name=pcfg.embedder, dim=pcfg.embedder_dim)
-
-
-def _build_reranker(pcfg: Any) -> Any:
-    if pcfg.reranker == "none":
-        return _NullReranker()
-    from mybot.palace.reranker import Reranker
-    return Reranker(model_name=pcfg.reranker)
-
-
-class _NullReranker:
-    """No-op reranker — retriever falls back to RRF order."""
-    model_name = "none"
-    def rerank(self, query: str, docs: list) -> list:
-        return []
 
 
 def _config_as_dict(config: Any) -> dict[str, Any]:

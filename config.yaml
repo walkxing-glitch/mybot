@@ -19,6 +19,7 @@ tools:
     - neural_twin
     - calendar
     - memory
+    - palace
   shell:
     allowed_commands: [ls, cat, grep, find, python, git, pip, uv, docker]
     timeout: 30
@@ -43,44 +44,7 @@ gateway:
     token: "${TELEGRAM_BOT_TOKEN}"
     polling_mode: true
 
-# 丽泽SOHO双塔DNA记忆系统（mybot/palace）
-# See docs/superpowers/specs/2026-04-16-mybot-memory-palace-design.md
+# 丽泽SOHO双塔DNA记忆系统（独立服务 soho-twin-towers :8004）
 palace:
-  enabled: true  # false → 回退到 legacy MemoryEngine
-  db_path: data/palace.db
-  current_year_scope: 3
-  embedder: doubao
-  embedder_dim: 2048
-  reranker: none
-  top_k_south: 5
-  top_k_fact: 3
-
-rooms:
-  fixed:
-    1: 消费
-    2: 工作
-    3: 人际
-    4: 健康
-    5: 学习
-    6: 技术
-    7: 项目
-    8: 家庭
-    9: 出行
-    10: 情绪
-  misc_room: 20
-
-atrium_guards:
-  blacklist_patterns:
-    - "不可用"
-    - "未能找到"
-    - "服务中断"
-    - "超时"
-    - "工具报错"
-    - "无法访问"
-    - "操作失败"
-    - "连接失败"
-  evidence_threshold: 3
-  evidence_days_span: 2
-  require_manual_approve: true
-  review_cycle_days: 30
-  stale_archive_days: 90
+  enabled: true
+  base_url: "http://localhost:8004"

@@ -13,11 +13,6 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
-    # Dispatch to palace CLI: `python -m mybot memory <subcommand>`
-    if len(sys.argv) > 1 and sys.argv[1] == "memory":
-        from mybot.palace.cli import main as palace_cli_main
-        sys.exit(palace_cli_main(sys.argv[2:]))
-
     parser = argparse.ArgumentParser(
         prog="mybot",
         description="MyBot — 个人 AI Agent（本体论大脑 + 记忆引擎）",
