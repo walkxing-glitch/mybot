@@ -74,3 +74,53 @@ class EvolutionQueue:
         ) as cursor:
             row = await cursor.fetchone()
             return dict(row) if row else None
+
+    async def list_by_status(
+        self, status: str, *, type: str | None = None, limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        if type:
+            sql = "SELECT * FROM evolution_queue WHERE status = ? AND type = ? ORDER BY priority DESC, created_at DESC LIMIT ?"
+            params = (status, type, limit)
+        else:
+            sql = "SELECT * FROM evolution_queue WHERE status = ? ORDER BY priority DESC, created_at DESC LIMIT ?"
+            params = (status, limit)
+        async with self._db.execute(sql, params) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    async def update_status(self, eid: str, new_status: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        if new_status == "applied":
+            await self._db.execute(
+                "UPDATE evolution_queue SET status = ?, applied_at = ?, reviewed_at = COALESCE(reviewed_at, ?) WHERE id = ?",
+                (new_status, now, now, eid),
+            )
+        elif new_status in ("approved", "rejected"):
+            await self._db.execute(
+                "UPDATE evolution_queue SET status = ?, reviewed_at = ? WHERE id = ?",
+                (new_status, now, eid),
+            )
+        else:
+            await self._db.execute(
+                "UPDATE evolution_queue SET status = ? WHERE id = ?",
+                (new_status, eid),
+            )
+        await self._db.commit()
+
+    async def expire_stale(self) -> int:
+        now = datetime.now(timezone.utc).isoformat()
+        cursor = await self._db.execute(
+            "UPDATE evolution_queue SET status = 'expired' WHERE status = 'proposed' AND expires_at < ?",
+            (now,),
+        )
+        await self._db.commit()
+        return cursor.rowcount
+
+    async def cleanup_chat_events(self, max_age_days: int = 30) -> int:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+        cursor = await self._db.execute(
+            "DELETE FROM evolution_queue WHERE type = 'chat_event' AND created_at < ?",
+            (cutoff,),
+        )
+        await self._db.commit()
+        return cursor.rowcount
