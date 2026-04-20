@@ -119,8 +119,9 @@ class Agent:
             session.append({"role": "user", "content": message})
 
             # 4) 工具循环
+            tool_log: list[dict[str, Any]] = []
             try:
-                final_text = await self._run_tool_loop(session, system_prompt)
+                final_text, tool_log = await self._run_tool_loop(session, system_prompt)
             except Exception as exc:  # noqa: BLE001
                 logger.exception("agent tool loop failed: %s", exc)
                 final_text = f"抱歉，处理你的请求时出错了：{exc}"
@@ -204,9 +205,10 @@ class Agent:
         self,
         session: SessionState,
         system_prompt: str,
-    ) -> str:
-        """跑 LLM ↔ 工具循环，返回最终 assistant 文本。"""
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """跑 LLM ↔ 工具循环，返回 (最终 assistant 文本, 工具调用日志)。"""
         tools_schema = self._build_tools_schema()
+        tool_log: list[dict[str, Any]] = []
 
         for iteration in range(MAX_TOOL_ITERATIONS):
             messages = self._assemble_messages(session, system_prompt)
@@ -237,10 +239,11 @@ class Agent:
                         part.get("text", "") if isinstance(part, dict) else str(part)
                         for part in content
                     )
-                return (content or "").strip() or "（空回复）"
+                return ((content or "").strip() or "（空回复）"), tool_log
 
             # 并行执行工具
-            await self._dispatch_tool_calls(session, tool_calls)
+            round_log = await self._dispatch_tool_calls(session, tool_calls)
+            tool_log.extend(round_log)
 
         logger.warning(
             "tool loop hit MAX_TOOL_ITERATIONS=%d for session=%s",
@@ -249,16 +252,20 @@ class Agent:
         )
         fallback = "（工具调用超过上限，我暂停了后续自动执行。请告诉我接下来怎么做。）"
         session.append({"role": "assistant", "content": fallback})
-        return fallback
+        return fallback, tool_log
 
     async def _dispatch_tool_calls(
         self,
         session: SessionState,
         tool_calls: list[dict[str, Any]],
-    ) -> None:
-        """并行跑所有 tool_calls，把结果作为 tool 消息追加到 session。"""
+    ) -> list[dict[str, Any]]:
+        """并行跑所有 tool_calls，把结果作为 tool 消息追加到 session。
 
-        async def run_one(call: dict[str, Any]) -> dict[str, Any]:
+        Returns:
+            工具调用日志列表，每项包含 name / success / latency_ms。
+        """
+
+        async def run_one(call: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             call_id = call.get("id") or ""
             fn = call.get("function") or {}
             name = fn.get("name", "")
@@ -271,24 +278,39 @@ class Agent:
                 else:
                     args = {}
             except json.JSONDecodeError as exc:
-                return {
+                content = f"[tool_error] 工具参数 JSON 解析失败: {exc}；原始: {raw_args!r}"
+                msg = {
                     "role": "tool",
                     "tool_call_id": call_id,
                     "name": name,
-                    "content": f"[tool_error] 工具参数 JSON 解析失败: {exc}；原始: {raw_args!r}",
+                    "content": content,
                 }
+                log_entry = {"name": name, "success": False, "latency_ms": 0}
+                return msg, log_entry
 
+            t0 = time.monotonic()
             output = await self._execute_tool(name, args)
-            return {
+            latency_ms = int((time.monotonic() - t0) * 1000)
+
+            msg = {
                 "role": "tool",
                 "tool_call_id": call_id,
                 "name": name,
                 "content": output,
             }
+            log_entry = {
+                "name": name,
+                "success": not output.startswith("[tool_error]"),
+                "latency_ms": latency_ms,
+            }
+            return msg, log_entry
 
         results = await asyncio.gather(*(run_one(c) for c in tool_calls))
-        for r in results:
-            session.append(r)
+        log_entries: list[dict[str, Any]] = []
+        for msg, log_entry in results:
+            session.append(msg)
+            log_entries.append(log_entry)
+        return log_entries
 
     async def _execute_tool(self, name: str, arguments: dict[str, Any]) -> str:
         """查找工具并执行。所有异常吞掉转成错误字符串，不让 agent 循环挂掉。"""
