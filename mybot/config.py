@@ -84,12 +84,25 @@ class GatewayConfig:
 
 
 @dataclass
+class HeartbeatConfig:
+    enabled: bool = False
+    interval_seconds: int = 1800
+    skill_forge_enabled: bool = True
+    mirror_enabled: bool = True
+    mirror_interval_hours: int = 24
+    scout_enabled: bool = True
+    scout_interval_hours: int = 168
+    max_llm_calls_per_tick: int = 10
+
+
+@dataclass
 class Config:
     model: ModelConfig
     api_keys: dict[str, str]
     tools: ToolsConfig
     memory: MemoryConfig
     gateway: GatewayConfig
+    heartbeat: HeartbeatConfig
     raw: dict[str, Any]
 
     @classmethod
@@ -160,12 +173,28 @@ class Config:
             ),
         )
 
+        hb_data = data.get("heartbeat", {}) or {}
+        mirror_data = hb_data.get("mirror", {}) or {}
+        scout_data = hb_data.get("scout", {}) or {}
+        sf_data = hb_data.get("skill_forge", {}) or {}
+        heartbeat = HeartbeatConfig(
+            enabled=bool(hb_data.get("enabled", False)),
+            interval_seconds=int(hb_data.get("interval_seconds", 1800)),
+            skill_forge_enabled=bool(sf_data.get("enabled", True)),
+            mirror_enabled=bool(mirror_data.get("enabled", True)),
+            mirror_interval_hours=int(mirror_data.get("interval_hours", 24)),
+            scout_enabled=bool(scout_data.get("enabled", True)),
+            scout_interval_hours=int(scout_data.get("interval_hours", 168)),
+            max_llm_calls_per_tick=int(hb_data.get("max_llm_calls_per_tick", 10)),
+        )
+
         return cls(
             model=model,
             api_keys=api_keys,
             tools=tools,
             memory=memory,
             gateway=gateway,
+            heartbeat=heartbeat,
             raw=data,
         )
 
