@@ -48,3 +48,16 @@ gateway:
 palace:
   enabled: true
   base_url: "http://localhost:8005"
+
+# Evolution Engine — 自动进化系统
+heartbeat:
+  enabled: true
+  interval_seconds: 1800
+  skill_forge:
+    enabled: true
+  mirror:
+    interval_hours: 24
+    enabled: true
+  scout:
+    interval_hours: 168
+    enabled: true

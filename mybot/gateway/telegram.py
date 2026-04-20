@@ -63,6 +63,7 @@ HELP_TEXT = (
 
 
 AGENT_KEY = "mybot.agent"
+HEARTBEAT_KEY = "heartbeat_loop"
 
 
 def _session_id_for(update: Update) -> str:
@@ -142,6 +143,10 @@ async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     typing_task = asyncio.create_task(keep_typing())
 
+    hb = context.application.bot_data.get(HEARTBEAT_KEY)
+    if hb is not None:
+        hb.set_busy(True)
+
     try:
         reply = await agent.chat(session_id=session_id, message=text)
     except Exception as exc:  # noqa: BLE001
@@ -153,6 +158,8 @@ async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await typing_task
         except (asyncio.CancelledError, Exception):  # noqa: BLE001
             pass
+        if hb is not None:
+            hb.set_busy(False)
 
     reply = (reply or "").strip() or "（空回复）"
 
@@ -329,6 +336,7 @@ async def run_telegram(
     token: str,
     *,
     drop_pending: bool = True,
+    heartbeat: Any = None,
 ) -> None:
     """启动 Telegram bot（长轮询），阻塞直到 Ctrl+C。"""
     if not token or token.startswith("${"):
@@ -356,6 +364,11 @@ async def run_telegram(
         raise RuntimeError("telegram Application 没有 updater，无法长轮询。")
     await updater.start_polling(drop_pending_updates=drop_pending)
 
+    heartbeat_task = None
+    if heartbeat is not None:
+        heartbeat_task = asyncio.create_task(heartbeat.run())
+        application.bot_data[HEARTBEAT_KEY] = heartbeat
+
     try:
         # 无限阻塞直到被取消
         stop_event = asyncio.Event()
@@ -363,6 +376,13 @@ async def run_telegram(
     except (KeyboardInterrupt, asyncio.CancelledError):
         logger.info("Telegram bot stopping…")
     finally:
+        if heartbeat_task is not None:
+            heartbeat.stop()
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except (asyncio.CancelledError, Exception):
+                pass
         try:
             await updater.stop()
         except Exception:  # noqa: BLE001
@@ -435,8 +455,31 @@ async def run_telegram_from_config(
         except Exception as exc:  # noqa: BLE001
             logger.warning("加载工具失败: %s", exc)
 
-    agent = Agent(config=config, memory_engine=memory_engine, tools=tools)
-    await run_telegram(agent, token=token)
+    # Evolution queue + heartbeat
+    evolution_queue = None
+    heartbeat = None
+    if hasattr(config, "heartbeat") and config.heartbeat.enabled:
+        from mybot.evolution.queue import EvolutionQueue
+        evolution_queue = EvolutionQueue()
+        await evolution_queue.initialize()
+        logger.info("Evolution queue initialized")
+
+        from mybot.evolution.heartbeat import HeartbeatLoop
+
+        async def on_tick():
+            await evolution_queue.expire_stale()
+            await evolution_queue.cleanup_chat_events()
+            logger.info("Heartbeat tick: expire + cleanup done")
+
+        heartbeat = HeartbeatLoop(config=config.heartbeat, on_tick=on_tick)
+
+    agent = Agent(
+        config=config,
+        memory_engine=memory_engine,
+        tools=tools,
+        evolution_queue=evolution_queue,
+    )
+    await run_telegram(agent, token=token, heartbeat=heartbeat)
 
 
 if __name__ == "__main__":  # pragma: no cover
