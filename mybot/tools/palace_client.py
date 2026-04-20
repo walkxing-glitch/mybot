@@ -20,7 +20,7 @@ class PalaceClient:
     end_session, get_stats) so it can be injected as memory_engine.
     """
 
-    def __init__(self, base_url: str = "http://localhost:8004", timeout: float = 30.0):
+    def __init__(self, base_url: str = "http://localhost:8005", timeout: float = 30.0):
         self.base_url = base_url.rstrip("/")
         self._client = httpx.AsyncClient(base_url=self.base_url, timeout=timeout)
 

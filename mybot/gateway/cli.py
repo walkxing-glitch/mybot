@@ -357,7 +357,7 @@ async def _try_build_palace(config: Any) -> Any:
     if not palace_cfg.get("enabled", False):
         return None
 
-    base_url = palace_cfg.get("base_url", "http://localhost:8004")
+    base_url = palace_cfg.get("base_url", "http://localhost:8005")
 
     try:
         from mybot.tools.palace_client import PalaceClient

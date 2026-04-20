@@ -44,7 +44,7 @@ gateway:
     token: "${TELEGRAM_BOT_TOKEN}"
     polling_mode: true
 
-# 丽泽SOHO双塔DNA记忆系统（独立服务 soho-twin-towers :8004）
+# 丽泽SOHO双塔DNA记忆系统（独立服务 soho-twin-towers :8005）
 palace:
   enabled: true
-  base_url: "http://localhost:8004"
+  base_url: "http://localhost:8005"
