@@ -116,6 +116,29 @@ class EvolutionQueue:
         await self._db.commit()
         return cursor.rowcount
 
+    async def insert_chat_event(
+        self,
+        *,
+        session_id: str,
+        tool_calls: list[dict[str, Any]],
+        memory_hit: bool,
+        negative_signal: bool,
+        turn_count: int,
+    ) -> str:
+        payload = {
+            "session_id": session_id,
+            "tool_calls": tool_calls,
+            "memory_hit": memory_hit,
+            "negative_signal": negative_signal,
+            "turn_count": turn_count,
+        }
+        return await self.insert(
+            type="chat_event",
+            source="agent",
+            payload=payload,
+            expires_in_days=30,
+        )
+
     async def cleanup_chat_events(self, max_age_days: int = 30) -> int:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
         cursor = await self._db.execute(

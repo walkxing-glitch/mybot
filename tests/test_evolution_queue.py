@@ -79,3 +79,24 @@ async def test_delete_old_chat_events(queue):
     assert deleted == 1
     item = await queue.get(eid)
     assert item is None
+
+
+async def test_insert_chat_event(queue):
+    eid = await queue.insert_chat_event(
+        session_id="tg-12345",
+        tool_calls=[
+            {"name": "palace", "success": True, "latency_ms": 230},
+            {"name": "web_search", "success": False, "latency_ms": 5100},
+        ],
+        memory_hit=True,
+        negative_signal=False,
+        turn_count=4,
+    )
+    item = await queue.get(eid)
+    assert item["type"] == "chat_event"
+    assert item["source"] == "agent"
+    payload = json.loads(item["payload"])
+    assert payload["session_id"] == "tg-12345"
+    assert len(payload["tool_calls"]) == 2
+    assert payload["memory_hit"] is True
+    assert payload["turn_count"] == 4
