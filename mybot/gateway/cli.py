@@ -340,7 +340,14 @@ async def run_cli_from_config(
         except Exception as exc:  # noqa: BLE001
             logger.warning("加载工具失败: %s", exc)
 
-    agent = Agent(config=config, memory_engine=memory_engine, tools=tools)
+    # Evolution queue for chat_event logging (no heartbeat in CLI — short-lived)
+    evolution_queue = None
+    if hasattr(config, "heartbeat") and config.heartbeat.enabled:
+        from mybot.evolution.queue import EvolutionQueue
+        evolution_queue = EvolutionQueue()
+        await evolution_queue.initialize()
+
+    agent = Agent(config=config, memory_engine=memory_engine, tools=tools, evolution_queue=evolution_queue)
     await run_cli(agent, session_id=session_id)
 
 
