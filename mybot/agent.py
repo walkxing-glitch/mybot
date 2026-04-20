@@ -80,9 +80,11 @@ class Agent:
         tools: list[BaseTool] | None = None,
         *,
         model: str | None = None,
+        evolution_queue: Any | None = None,
     ) -> None:
         self.config = config
         self.memory_engine = memory_engine
+        self.evolution_queue = evolution_queue
         self.tools: list[BaseTool] = list(tools or [])
         self._tool_by_name: dict[str, BaseTool] = {t.name: t for t in self.tools}
         self._sessions: dict[str, SessionState] = {}
@@ -130,7 +132,21 @@ class Agent:
             # 5) 裁剪历史
             session.trim()
 
-            # 6) 异步触发记忆整理（不阻塞返回）
+            # 6) Emit chat_event to evolution queue
+            if self.evolution_queue is not None:
+                memory_hit = bool(memory_context)
+                negative_signal = self._detect_negative_signal(message)
+                asyncio.create_task(
+                    self._emit_chat_event(
+                        session_id=session_id,
+                        tool_log=tool_log,
+                        memory_hit=memory_hit,
+                        negative_signal=negative_signal,
+                        turn_count=session.turn_count,
+                    )
+                )
+
+            # 7) 异步触发记忆整理（不阻塞返回）
             if self.memory_engine is not None:
                 asyncio.create_task(
                     self._post_process_memory(session_id, message, final_text)
@@ -523,6 +539,35 @@ class Agent:
                     await maybe
             except Exception as exc:  # noqa: BLE001
                 logger.warning("memory.remember fallback failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Evolution queue helpers
+    # ------------------------------------------------------------------
+
+    _NEGATIVE_PATTERNS = ("不对", "错了", "重来", "算了", "不是这个", "搞错")
+
+    def _detect_negative_signal(self, message: str) -> bool:
+        return any(p in message for p in self._NEGATIVE_PATTERNS)
+
+    async def _emit_chat_event(
+        self,
+        *,
+        session_id: str,
+        tool_log: list[dict[str, Any]],
+        memory_hit: bool,
+        negative_signal: bool,
+        turn_count: int,
+    ) -> None:
+        try:
+            await self.evolution_queue.insert_chat_event(
+                session_id=session_id,
+                tool_calls=tool_log,
+                memory_hit=memory_hit,
+                negative_signal=negative_signal,
+                turn_count=turn_count,
+            )
+        except Exception:
+            logger.warning("Failed to emit chat_event", exc_info=True)
 
     # ------------------------------------------------------------------
     # Config helpers
