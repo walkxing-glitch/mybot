@@ -89,11 +89,60 @@ class Agent:
         self._tool_by_name: dict[str, BaseTool] = {t.name: t for t in self.tools}
         self._sessions: dict[str, SessionState] = {}
         self._session_lock: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._background_tasks: set[asyncio.Task[Any]] = set()
+        self._closed: bool = False
 
         if model is not None:
             self.model = model
         else:
             self.model = self._resolve_default_model(config)
+
+    def _spawn_tracked(self, coro: Any, *, name: str) -> asyncio.Task[Any]:
+        """Spawn a background task tracked for shutdown. Errors are logged."""
+        task = asyncio.create_task(coro, name=name)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        task.add_done_callback(self._log_task_exception)
+        return task
+
+    @staticmethod
+    def _log_task_exception(task: asyncio.Task[Any]) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.warning("background task %s failed: %s", task.get_name(), exc)
+
+    async def close(self) -> None:
+        """Drain background tasks, then close owned resources.
+
+        Order matters: drain chat_event/post_process first so they land before
+        we close the queues/clients they write to.
+        """
+        if self._closed:
+            return
+        self._closed = True
+
+        if self._background_tasks:
+            logger.info("Agent.close: draining %d background tasks", len(self._background_tasks))
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+
+        for resource, label in (
+            (self.memory_engine, "memory_engine"),
+            (self.evolution_queue, "evolution_queue"),
+            *[(t, f"tool:{t.name}") for t in self.tools],
+        ):
+            if resource is None:
+                continue
+            close = getattr(resource, "close", None)
+            if not callable(close):
+                continue
+            try:
+                result = close()
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception:  # noqa: BLE001
+                logger.warning("close %s failed", label, exc_info=True)
 
     # ------------------------------------------------------------------
     # 公开接口
@@ -129,27 +178,33 @@ class Agent:
                 final_text = f"抱歉，处理你的请求时出错了：{exc}"
                 session.append({"role": "assistant", "content": final_text})
 
-            # 5) 裁剪历史
+            # 5) Snapshot message history BEFORE trim so async consumers see the
+            #    full conversation (not the trimmed view).
+            memory_snapshot = list(session.messages)
+
+            # 6) 裁剪历史
             session.trim()
 
-            # 6) Emit chat_event to evolution queue
-            if self.evolution_queue is not None:
+            # 7) Emit chat_event to evolution queue
+            if self.evolution_queue is not None and not self._closed:
                 memory_hit = bool(memory_context)
                 negative_signal = self._detect_negative_signal(message)
-                asyncio.create_task(
+                self._spawn_tracked(
                     self._emit_chat_event(
                         session_id=session_id,
                         tool_log=tool_log,
                         memory_hit=memory_hit,
                         negative_signal=negative_signal,
                         turn_count=session.turn_count,
-                    )
+                    ),
+                    name=f"chat_event:{session_id}",
                 )
 
-            # 7) 异步触发记忆整理（不阻塞返回）
-            if self.memory_engine is not None:
-                asyncio.create_task(
-                    self._post_process_memory(session_id, message, final_text)
+            # 8) 异步触发记忆整理（不阻塞返回）
+            if self.memory_engine is not None and not self._closed:
+                self._spawn_tracked(
+                    self._post_process_memory(session_id, message, final_text, memory_snapshot),
+                    name=f"post_process:{session_id}",
                 )
 
             return final_text
@@ -505,19 +560,18 @@ class Agent:
         session_id: str,
         user_message: str,
         assistant_reply: str,
+        snapshot: list[dict[str, Any]],
     ) -> None:
-        """异步：本轮对话结束后，把 messages 喂给记忆引擎做整理。"""
+        """异步：本轮对话结束后，把 messages 喂给记忆引擎做整理。
+
+        snapshot is taken by chat() before trim, so we see the full history
+        regardless of subsequent trimming.
+        """
         engine = self.memory_engine
         if engine is None:
             return
-        # 尽量走正式接口 end_session（engine 会做摘要 / 画像 / 记忆提取）
         end_session = getattr(engine, "end_session", None)
         if callable(end_session):
-            session = self._sessions.get(session_id)
-            if session is None:
-                return
-            # 给 engine 一份本轮最新的消息快照
-            snapshot = list(session.messages)
             try:
                 maybe = end_session(session_id=session_id, conversation_messages=snapshot)
                 if asyncio.iscoroutine(maybe):
