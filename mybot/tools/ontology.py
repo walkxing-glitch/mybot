@@ -154,16 +154,18 @@ class OntologyTool(BaseTool):
         self.base_url = base_url.rstrip("/")
         self.ontology_id = ontology_id
         self.timeout = float(timeout)
+        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout)
+
+    async def close(self) -> None:
+        await self._client.aclose()
 
     # ---------------------------------------------------------------- helpers
 
     async def _get(
         self, path: str, params: dict[str, Any] | None = None
     ) -> ToolResult:
-        url = f"{self.base_url}{path}"
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(url, params=params or {})
+            resp = await self._client.get(path, params=params or {})
         except httpx.ConnectError as exc:
             return ToolResult(
                 success=False,
@@ -199,10 +201,8 @@ class OntologyTool(BaseTool):
     async def _post(
         self, path: str, body: dict[str, Any] | None = None
     ) -> ToolResult:
-        url = f"{self.base_url}{path}"
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(url, json=body or {})
+            resp = await self._client.post(path, json=body or {})
         except httpx.ConnectError as exc:
             return ToolResult(
                 success=False, output="",

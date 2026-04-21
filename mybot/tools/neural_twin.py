@@ -52,6 +52,10 @@ class NeuralTwinTool(BaseTool):
     def __init__(self, base_url: str = DEFAULT_BASE_URL, timeout: float = DEFAULT_TIMEOUT) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = float(timeout)
+        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout)
+
+    async def close(self) -> None:
+        await self._client.aclose()
 
     # ---------------------------------------------------------------- helpers
 
@@ -62,10 +66,8 @@ class NeuralTwinTool(BaseTool):
         json_body: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
     ) -> ToolResult:
-        url = f"{self.base_url}{path}"
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.request(method, url, json=json_body, params=params)
+            resp = await self._client.request(method, path, json=json_body, params=params)
         except httpx.ConnectError as exc:
             return ToolResult(
                 success=False,
