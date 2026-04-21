@@ -395,6 +395,10 @@ async def run_telegram(
             await application.shutdown()
         except Exception:  # noqa: BLE001
             logger.exception("application.shutdown failed")
+        try:
+            await agent.close()
+        except Exception:  # noqa: BLE001
+            logger.exception("agent.close failed")
 
 
 async def run_telegram_from_config(

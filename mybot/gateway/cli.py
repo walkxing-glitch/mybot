@@ -348,7 +348,13 @@ async def run_cli_from_config(
         await evolution_queue.initialize()
 
     agent = Agent(config=config, memory_engine=memory_engine, tools=tools, evolution_queue=evolution_queue)
-    await run_cli(agent, session_id=session_id)
+    try:
+        await run_cli(agent, session_id=session_id)
+    finally:
+        try:
+            await agent.close()
+        except Exception:  # noqa: BLE001
+            logger.exception("agent.close failed")
 
 
 async def _try_build_palace(config: Any) -> Any:
