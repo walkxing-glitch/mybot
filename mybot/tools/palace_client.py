@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 import httpx
@@ -11,6 +12,8 @@ import httpx
 from mybot.tools.base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_BASE_URL = os.environ.get("MYBOT_PALACE_URL", "http://localhost:8005")
 
 
 class PalaceClient:
@@ -20,7 +23,7 @@ class PalaceClient:
     end_session, get_stats) so it can be injected as memory_engine.
     """
 
-    def __init__(self, base_url: str = "http://localhost:8005", timeout: float = 30.0):
+    def __init__(self, base_url: str = DEFAULT_BASE_URL, timeout: float = 30.0):
         self.base_url = base_url.rstrip("/")
         self._client = httpx.AsyncClient(base_url=self.base_url, timeout=timeout)
 

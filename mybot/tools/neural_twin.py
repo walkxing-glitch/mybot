@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 import httpx
 
 from mybot.tools.base import BaseTool, ToolResult
 
-DEFAULT_BASE_URL = "http://localhost:8004"
+DEFAULT_BASE_URL = os.environ.get("MYBOT_NEURAL_TWIN_URL", "http://localhost:8004")
 DEFAULT_TIMEOUT = 30.0
 
 _ALLOWED_OPS = (

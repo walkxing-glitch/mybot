@@ -123,6 +123,14 @@ class WebFetchTool(BaseTool):
 
     def __init__(self, timeout: float = DEFAULT_TIMEOUT) -> None:
         self.timeout = float(timeout)
+        self._client = httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=True,
+            headers={"User-Agent": "MyBotAgent/0.1 (+https://github.com/walkxing-glitch)"},
+        )
+
+    async def close(self) -> None:
+        await self._client.aclose()
 
     async def execute(self, **params) -> ToolResult:
         url = params.get("url")
@@ -138,12 +146,7 @@ class WebFetchTool(BaseTool):
         max_length = max(200, min(max_length, 200_000))
 
         try:
-            async with httpx.AsyncClient(
-                timeout=self.timeout,
-                follow_redirects=True,
-                headers={"User-Agent": "MyBotAgent/0.1 (+https://github.com/walkxing-glitch)"},
-            ) as client:
-                resp = await client.get(url)
+            resp = await self._client.get(url)
         except httpx.TimeoutException:
             return ToolResult(success=False, output="", error=f"Fetch timed out after {self.timeout:.0f}s.")
         except httpx.HTTPError as exc:

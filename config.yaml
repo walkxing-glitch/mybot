@@ -25,7 +25,7 @@ tools:
     timeout: 30
   code:
     workspace_dirs:
-      - /Users/ddn/Developer
+      - ${HOME}/Developer
   ontology:
     # 对接 myontology/ontology-engine（本机 :8003，已在前台 python 跑着）
     # ontology-platform 已于 2026-04-16 停止开发，不再对接

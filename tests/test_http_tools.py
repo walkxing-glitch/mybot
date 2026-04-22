@@ -1,4 +1,4 @@
-"""Tests for OntologyTool and NeuralTwinTool persistent httpx clients."""
+"""Tests for OntologyTool, NeuralTwinTool, and WebFetchTool persistent httpx clients."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import httpx
 
 from mybot.tools.neural_twin import NeuralTwinTool
 from mybot.tools.ontology import OntologyTool
+from mybot.tools.web import WebFetchTool
 
 
 async def test_ontology_tool_close_releases_client():
@@ -67,6 +68,38 @@ async def test_neural_twin_tool_reuses_client_across_calls():
 
     r1 = await tool.execute(operation="get_day_forecast")
     r2 = await tool.execute(operation="get_day_forecast")
+    assert r1.success is True
+    assert r2.success is True
+    assert call_count == 2
+    await tool.close()
+
+
+async def test_web_fetch_tool_close_releases_client():
+    tool = WebFetchTool()
+    assert tool._client is not None
+    assert not tool._client.is_closed
+    await tool.close()
+    assert tool._client.is_closed
+
+
+async def test_web_fetch_tool_reuses_client_across_calls():
+    call_count = 0
+
+    async def handler(req: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            text="<html><body><p>hello</p></body></html>",
+        )
+
+    tool = WebFetchTool.__new__(WebFetchTool)
+    tool.timeout = 30.0
+    tool._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    r1 = await tool.execute(url="https://example.com/a")
+    r2 = await tool.execute(url="https://example.com/b")
     assert r1.success is True
     assert r2.success is True
     assert call_count == 2
